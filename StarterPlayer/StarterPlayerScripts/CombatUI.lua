@@ -60,6 +60,7 @@ local lastHoverKey = nil
 local lastSwapTime = 0
 local lastRejectReason = nil
 local lastRejectKey = nil
+local isGridVisible = true
 
 local function dbg(message)
     -- Propósito: Emitir logs de depuración del cliente de combate.
@@ -154,6 +155,7 @@ gridFrame.Parent = container
 
 local cellButtons = {}
 local ghostFrame = nil  -- Pieza flotante que sigue al cursor durante drag
+local normalizePointerPosition
 
 local function buildCells()
     -- Propósito: Construir la grilla visual completa del tablero.
@@ -231,7 +233,9 @@ local function showGhost(col, row, mousePos)
     end
     ghostFrame.BackgroundColor3 = ELEMENT_COLORS[tile.elementType] or Color3.fromRGB(80, 80, 80)
     ghostLabel.Text = ELEMENT_LABELS[tile.elementType] or "?"
-    ghostFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
+    local normalizedPos = normalizePointerPosition(mousePos)
+    -- Pegar el ghost al cursor (ajuste por AnchorPoint centrado)
+    ghostFrame.Position = UDim2.new(0, normalizedPos.X, 0, (normalizedPos.Y + CELL_SIZE))
     ghostFrame.Visible = true
 end
 
@@ -316,23 +320,42 @@ local function rerender()
     renderSelection()
 end
 
+function normalizePointerPosition(pointerPos)
+    -- Propósito: Normalizar coordenadas de input al espacio de ScreenGui.
+    -- Precondiciones:
+    --   1. pointerPos debe incluir X e Y.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: Vector2
+    local insetTopLeft = GuiService:GetGuiInset()
+    return Vector2.new(pointerPos.X - insetTopLeft.X, pointerPos.Y - insetTopLeft.Y)
+end
+
 local function getCellFromMouse(mousePos)
     -- Propósito: Obtener celda por cálculo matemático dentro del GridFrame.
     -- Precondiciones:
     --   1. mousePos debe tener X e Y.
     -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
     -- Retorna: number|nil col, number|nil row
+    local normalizedPos = normalizePointerPosition(mousePos)
     local gridPos = gridFrame.AbsolutePosition
     local gridSize = gridFrame.AbsoluteSize
 
-    local localX = mousePos.X - gridPos.X
-    local localY = mousePos.Y - gridPos.Y
+    local localX = normalizedPos.X - gridPos.X
+    local localY = normalizedPos.Y - gridPos.Y
 
     if localX < 0 or localY < 0 or localX > gridSize.X or localY > gridSize.Y then
         return nil, nil
     end
 
     local step = CELL_SIZE + CELL_PADDING
+    local offsetX = localX % step
+    local offsetY = localY % step
+
+    -- Ignorar zonas de padding para evitar cambios de celda accidentales.
+    if offsetX > CELL_SIZE or offsetY > CELL_SIZE then
+        return nil, nil
+    end
+
     local col = math.floor(localX / step) + 1
     local row = math.floor(localY / step) + 1
 
@@ -341,24 +364,6 @@ local function getCellFromMouse(mousePos)
     end
 
     return col, row
-end
-
-local getDragDirection
-
-function getDragDirection(delta)
-    if math.abs(delta.X) > math.abs(delta.Y) then
-        if delta.X > 0 then
-            return 1, 0 -- derecha
-        else
-            return -1, 0 -- izquierda
-        end
-    else
-        if delta.Y > 0 then
-            return 0, 1 -- abajo
-        else
-            return 0, -1 -- arriba
-        end
-    end
 end
 
 local function setReject(key, reason)
@@ -408,7 +413,7 @@ local function setDragTarget(col, row)
     end
 
     if not CombatGrid.areAdjacent(dragCurrentCell.col, dragCurrentCell.row, col, row) then
-        setReject(cellKey(row, col), "swap no adyacente")
+        setReject(cellKey(col, row), "swap no adyacente")
         return false
     end
 
@@ -497,6 +502,39 @@ local function connectCellInput()
                 startTurn(c, r)
             end)
 
+            btn.MouseEnter:Connect(function()
+                -- Propósito: Aplicar swap al entrar a una celda durante drag de mouse.
+                -- Precondiciones:
+                --   1. Debe existir un drag activo con botón principal presionado.
+                -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+                -- Retorna: nil
+                if not isDragging or not isPrimaryMouseDown or not dragCurrentCell then
+                    return
+                end
+
+                local now = os.clock()
+                if now - lastSwapTime < SWAP_COOLDOWN then
+                    return
+                end
+
+                local targetKey = cellKey(c, r)
+                if targetKey == lastHoverKey then
+                    return
+                end
+                lastHoverKey = targetKey
+
+                if not CombatGrid.areAdjacent(dragCurrentCell.col, dragCurrentCell.row, c, r) then
+                    return
+                end
+
+                dbg("objetivo drag fila " .. r .. " col " .. c)
+                local didSwap = setDragTarget(c, r)
+                if didSwap then
+                    lastSwapTime = now
+                    dragStartPos = UserInputService:GetMouseLocation()
+                end
+            end)
+
             btn.TouchTap:Connect(function()
                 if not localGrid then
                     return
@@ -514,43 +552,6 @@ local function connectCellInput()
 
         local mousePos = UserInputService:GetMouseLocation()
         showGhost(dragCurrentCell.col, dragCurrentCell.row, mousePos)
-
-        local now = os.clock()
-        if now - lastSwapTime < SWAP_COOLDOWN then
-            return
-        end
-
-        if not dragStartPos then
-            dragStartPos = mousePos
-            return
-        end
-
-        local delta = mousePos - dragStartPos
-        if delta.Magnitude < DRAG_THRESHOLD then
-            return
-        end
-
-        local dx, dy = getDragDirection(delta)
-        local targetCol = dragCurrentCell.col + dx
-        local targetRow = dragCurrentCell.row + dy
-
-        local hoverCol, hoverRow = getCellFromMouse(mousePos)
-        if hoverCol ~= targetCol or hoverRow ~= targetRow then
-            return
-        end
-
-        local targetKey = cellKey(targetCol, targetRow)
-        if targetKey == lastHoverKey then
-            return
-        end
-        lastHoverKey = targetKey
-
-        dbg("objetivo drag fila " .. targetRow .. " col " .. targetCol)
-        local didSwap = setDragTarget(targetCol, targetRow)
-        if didSwap then
-            lastSwapTime = now
-            dragStartPos = mousePos
-        end
     end)
 
     UserInputService.InputBegan:Connect(function(input, _gameProcessed)
@@ -567,6 +568,19 @@ local function connectCellInput()
             if isDragging then
                 submitTurn()
             end
+        end
+    end)
+
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.R then
+            -- Propósito: Alternar visibilidad del tablero con tecla R.
+            -- Precondiciones: container debe existir.
+            -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+            -- Retorna: nil
+            isGridVisible = not isGridVisible
+            container.Visible = isGridVisible
+            dbg("Tablero " .. (isGridVisible and "mostrado" or "oculto"))
         end
     end)
 
@@ -591,14 +605,17 @@ local function connectCellInput()
             return
         end
 
-        local dx, dy = getDragDirection(delta)
-        local col = dragCurrentCell.col + dx
-        local row = dragCurrentCell.row + dy
-
         local hoverCol, hoverRow = getCellFromMouse(touch.Position)
-        if hoverCol ~= col or hoverRow ~= row then
+        if not hoverCol or not hoverRow then
             return
         end
+
+        if not CombatGrid.areAdjacent(dragCurrentCell.col, dragCurrentCell.row, hoverCol, hoverRow) then
+            return
+        end
+
+        local col = hoverCol
+        local row = hoverRow
 
         local targetKey = cellKey(col, row)
         if targetKey == lastHoverKey then

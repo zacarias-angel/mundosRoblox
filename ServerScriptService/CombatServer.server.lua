@@ -142,6 +142,36 @@ local function cleanPlayerState(player)
     playerStates[player] = nil
 end
 
+local function printGrid(grid)
+    -- Imprime el estado del tablero en consola (por filas)
+    for row = 1, ROWS do
+        local rowStr = ""
+        for col = 1, COLS do
+            local tile = grid[col][row]
+            if tile and tile.elementType then
+                rowStr = rowStr .. string.sub(tile.elementType, 1, 1) .. " "
+            else
+                rowStr = rowStr .. ". "
+            end
+        end
+        print("[CombatServer][GRID] " .. rowStr)
+    end
+end
+
+local function printCombos(combos, label)
+    if not combos or #combos == 0 then
+        print("[CombatServer][COMBO] " .. (label or "") .. " (ninguna)")
+        return
+    end
+    for i, combo in ipairs(combos) do
+        local cells = {}
+        for _, cell in ipairs(combo) do
+            table.insert(cells, "("..cell.col..","..cell.row..")")
+        end
+        print("[CombatServer][COMBO] " .. (label or "") .. " #"..i..": " .. table.concat(cells, ", "))
+    end
+end
+
 local function onCombatSubmit(player, payload)
     -- Propósito: Procesar una ruta de swaps enviada por el cliente.
     -- Precondiciones:
@@ -183,22 +213,48 @@ local function onCombatSubmit(player, payload)
         return
     end
 
+    print("\n[CombatServer] ===== TURNO DE " .. player.Name .. " =====")
+    print("[CombatServer] TABLERO ORIGINAL:")
+    printGrid(state.grid)
+    print("[CombatServer] SWAPS ejecutados:")
+    for i, swap in ipairs(payload.path) do
+        print("  Paso "..i..": ("..swap.col..","..swap.row..")")
+    end
+
     local executedSwaps = CombatGrid.applySwapPath(state.grid, payload.path)
-    local resolution = CombatGrid.resolveBoard(state.grid)
+
+    -- Log de cascadas
+    local gridSnapshot = CombatGrid.cloneGrid(state.grid)
+    local resolution = { cascades = {}, totalEliminadas = 0, totalCascades = 0 }
+    local safetyCounter = 0
+    while safetyCounter < 20 do
+        safetyCounter = safetyCounter + 1
+        local matches = CombatGrid.findMatches(state.grid)
+        if not matches.hasMatches then
+            break
+        end
+        print("[CombatServer] CASCADA "..safetyCounter.." - combinaciones:")
+        printCombos(matches.combos, "CASCADA "..safetyCounter)
+        local eliminadas = CombatGrid.aplicarCombos(state.grid, matches.combos)
+        print("[CombatServer] Eliminadas: " .. #eliminadas)
+        print("[CombatServer] TABLERO tras eliminar:")
+        printGrid(state.grid)
+        local gravityResult = CombatGrid.aplicarGravedad(state.grid)
+        print("[CombatServer] TABLERO tras gravedad+relleno:")
+        printGrid(state.grid)
+        table.insert(resolution.cascades, {
+            combos = matches.combos,
+            eliminadas = eliminadas,
+            movimientos = gravityResult.movimientos,
+            nuevas = gravityResult.nuevas,
+            totalCells = #eliminadas,
+        })
+        resolution.totalEliminadas = resolution.totalEliminadas + #eliminadas
+    end
+    resolution.totalCascades = #resolution.cascades
     local damage = resolution.totalEliminadas * DAMAGE_PER_CELL
 
-    dbg(
-        "ruta válida de "
-        .. player.Name
-        .. " | swaps="
-        .. tostring(#executedSwaps)
-        .. " | eliminadas="
-        .. tostring(resolution.totalEliminadas)
-        .. " cascadas="
-        .. tostring(resolution.totalCascades)
-        .. " damage="
-        .. tostring(damage)
-    )
+    print("[CombatServer] ===== FIN TURNO " .. player.Name .. " =====\n")
 
     syncPlayer(player, {
         path = payload.path,

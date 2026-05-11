@@ -1,0 +1,1089 @@
+-- Tipo: LocalScript
+-- Ubicacion: StarterPlayer > StarterCharacterScripts
+-- Se ejecuta en: Cliente
+-- Nombre sugerido: PlanetGravityController
+
+-- ModuleScript requerido: PlanetGravityMath
+-- Ubicacion:
+-- ReplicatedStorage > Modules > PlanetGravityMath
+-- Proposito:
+-- Funciones reutilizables para gravedad y movimiento tangencial.
+-- Usado por:
+-- - PlanetGravityController
+--
+-- ModuleScript requerido: PlanetRegistry
+-- Ubicacion:
+-- ReplicatedStorage > Modules > PlanetRegistry
+-- Proposito:
+-- Selecciona planeta activo por zonas de influencia y expone sus parametros.
+-- Usado por:
+-- - PlanetGravityController
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local PlanetGravityMath
+local PlanetRegistry
+local usingFallbackMath = false
+local usingFallbackRegistry = false
+local MODULE_LOOKUP_TIMEOUT = 1.2
+
+--[[
+Funcion: findModuleInReplicatedStorage
+
+Proposito:
+Busca un ModuleScript por nombre en rutas comunes y de forma recursiva.
+
+Precondiciones:
+- moduleName debe ser string no vacio.
+
+Requiere:
+- ReplicatedStorage disponible.
+
+Devuelve:
+- ModuleScript o nil.
+]]
+local function findModuleInReplicatedStorage(moduleName, timeoutSeconds)
+	local candidateNames = {moduleName, moduleName .. ".module"}
+	local startedAt = os.clock()
+	while (os.clock() - startedAt) <= timeoutSeconds do
+		local modulesFolder = ReplicatedStorage:FindFirstChild("Modules")
+		if modulesFolder then
+			for _, candidateName in ipairs(candidateNames) do
+				local fromModules = modulesFolder:FindFirstChild(candidateName)
+				if fromModules and fromModules:IsA("ModuleScript") then
+					return fromModules
+				end
+			end
+		end
+
+		for _, candidateName in ipairs(candidateNames) do
+			local fromRoot = ReplicatedStorage:FindFirstChild(candidateName)
+			if fromRoot and fromRoot:IsA("ModuleScript") then
+				return fromRoot
+			end
+		end
+
+		for _, candidateName in ipairs(candidateNames) do
+			local fromDescendants = ReplicatedStorage:FindFirstChild(candidateName, true)
+			if fromDescendants and fromDescendants:IsA("ModuleScript") then
+				return fromDescendants
+			end
+		end
+
+		task.wait(0.2)
+	end
+
+	return nil
+end
+
+-- Evita bloqueos infinitos si Modules o PlanetGravityMath no existen aun.
+do
+	local mathModule = findModuleInReplicatedStorage("PlanetGravityMath", MODULE_LOOKUP_TIMEOUT)
+
+	if mathModule and mathModule:IsA("ModuleScript") then
+		local ok, result = pcall(require, mathModule)
+		if ok and type(result) == "table" then
+			PlanetGravityMath = result
+		else
+			warn("PlanetGravityController: no se pudo require PlanetGravityMath, usando fallback local")
+			usingFallbackMath = true
+		end
+	else
+		warn("PlanetGravityController: no se encontro ReplicatedStorage/Modules/PlanetGravityMath, usando fallback local")
+		usingFallbackMath = true
+	end
+
+	local registryModule = findModuleInReplicatedStorage("PlanetRegistry", MODULE_LOOKUP_TIMEOUT)
+
+	if registryModule and registryModule:IsA("ModuleScript") then
+		local ok, result = pcall(require, registryModule)
+		if ok and type(result) == "table" then
+			PlanetRegistry = result
+		else
+			warn("PlanetGravityController: no se pudo require PlanetRegistry, usando fallback local")
+			usingFallbackRegistry = true
+		end
+	else
+		warn("PlanetGravityController: no se encontro ReplicatedStorage/Modules/PlanetRegistry, usando fallback local")
+		usingFallbackRegistry = true
+	end
+
+	if not PlanetGravityMath then
+		PlanetGravityMath = {}
+
+		function PlanetGravityMath.getGravityDirection(hrpPosition, centerPosition)
+			local offset = centerPosition - hrpPosition
+			if offset.Magnitude < 1e-5 then
+				return Vector3.new(0, -1, 0)
+			end
+			return offset.Unit
+		end
+
+		function PlanetGravityMath.projectOnTangent(worldMove, upVector)
+			return worldMove - upVector * worldMove:Dot(upVector)
+		end
+	end
+
+	if not PlanetRegistry then
+		PlanetRegistry = {}
+
+		local function getPlanetSurfacePart(model)
+			if not model or not model:IsA("Model") then
+				return nil
+			end
+
+			local preferredName = model:GetAttribute("SurfacePartName")
+			if type(preferredName) == "string" and preferredName ~= "" then
+				local preferred = model:FindFirstChild(preferredName, true)
+				if preferred and preferred:IsA("BasePart") then
+					return preferred
+				end
+			end
+
+			local sphere = model:FindFirstChild("Sphere", true)
+			if sphere and sphere:IsA("BasePart") then
+				return sphere
+			end
+
+			if model.PrimaryPart and model.PrimaryPart:IsA("BasePart") then
+				return model.PrimaryPart
+			end
+
+			local bestPart = nil
+			local bestVolume = -1
+			for _, descendant in ipairs(model:GetDescendants()) do
+				if descendant:IsA("BasePart") and descendant.Name ~= "GravityCenter" then
+					local size = descendant.Size
+					local volume = size.X * size.Y * size.Z
+					if volume > bestVolume then
+						bestVolume = volume
+						bestPart = descendant
+					end
+				end
+			end
+
+			return bestPart
+		end
+
+		local function buildPlanetData(model, position)
+			local gravityCenter = model:FindFirstChild("GravityCenter")
+			local sphere = getPlanetSurfacePart(model)
+			if not gravityCenter or not gravityCenter:IsA("BasePart") then
+				return nil
+			end
+			if not sphere or not sphere:IsA("BasePart") then
+				return nil
+			end
+
+			local radius = math.max(sphere.Size.X, sphere.Size.Y, sphere.Size.Z) * 0.5
+			local centerDistance = (position - gravityCenter.Position).Magnitude
+			local influenceRadius = radius * 3.2
+			if centerDistance > influenceRadius then
+				return nil
+			end
+
+			return {
+				model = model,
+				gravityCenter = gravityCenter,
+				sphere = sphere,
+				radius = radius,
+				influenceRadius = influenceRadius,
+				gravityAccel = 120,
+				surfaceOffset = 3.9,
+				centerDistance = centerDistance,
+			}
+		end
+
+		function PlanetRegistry.getBestPlanetForPosition(position, workspaceRef)
+			local planetsFolder = workspaceRef:FindFirstChild("Planets")
+			if planetsFolder and planetsFolder:IsA("Folder") then
+				local bestPlanetData = nil
+				local bestDistanceToSurface = math.huge
+				for _, child in ipairs(planetsFolder:GetChildren()) do
+					local candidate = buildPlanetData(child, position)
+					if candidate then
+						local distanceToSurface = math.abs(candidate.centerDistance - candidate.radius)
+						if distanceToSurface < bestDistanceToSurface then
+							bestDistanceToSurface = distanceToSurface
+							bestPlanetData = candidate
+						end
+					end
+				end
+				if bestPlanetData then
+					return bestPlanetData
+				end
+			end
+
+			local fallbackPlanet = workspaceRef:FindFirstChild("Planet")
+			if fallbackPlanet then
+				return buildPlanetData(fallbackPlanet, position)
+			end
+
+			return nil
+		end
+	end
+end
+
+if usingFallbackMath then
+	warn("PlanetGravityController: fallback local activo (mismo calculo base de gravedad/tangente)")
+end
+
+if usingFallbackRegistry then
+	warn("PlanetGravityController: fallback local de registro planetario activo")
+end
+
+local player = Players.LocalPlayer
+local character = script.Parent
+local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
+local camera = workspace.CurrentCamera
+
+local GRAVITY_ACCEL = 120
+local MOVE_SPEED = 34
+local MOVE_RESPONSE = 10
+local NO_INPUT_RESPONSE_MULT = 1.8
+local MAX_TANGENT_SPEED = 36
+local IDLE_TANGENT_LOCK_SPEED = 0.85
+local IDLE_RADIAL_LOCK_SPEED = 0.65
+local JUMP_IMPULSE = 58
+local JUMP_COOLDOWN = 0.22
+local TARGET_SURFACE_OFFSET = 3.9
+local SURFACE_SPRING = 42
+local SURFACE_DAMPING = 9
+local MAX_RADIAL_SPEED = 40
+local GROUND_RAY_LENGTH = 8
+local PLANET_SCAN_INTERVAL = 0.12
+local SPACE_LINEAR_DAMPING = 0.2
+local MAX_SPAWN_RADIAL_ERROR = 18
+local SURFACE_RADIUS_BLEND = 6
+local SURFACE_NEAR_BAND = 14
+
+local TEST_FLY_ENABLED = true
+local TEST_FLY_TOGGLE_KEY = Enum.KeyCode.F
+local TEST_FLY_SPEED = 120
+local TEST_FLY_FAST_MULT = 2
+local IDLE_TANGENT_BRAKE = 12
+
+local CAMERA_DISTANCE = 16
+local CAMERA_HEIGHT = 6
+local CAMERA_LOOK_OFFSET = 2
+local CAMERA_SMOOTH = 12
+local CAMERA_MOUSE_SENSITIVITY = 0.0032
+local CAMERA_PITCH_MIN = math.rad(-55)
+local CAMERA_PITCH_MAX = math.rad(60)
+local FACING_RESPONSE = 12
+
+-- Assets recomendados:
+-- Crear carpeta si no existe:
+-- ReplicatedStorage > Animations
+-- Animaciones esperadas (Animation instances):
+-- - Idle
+-- - Walk
+local DEFAULT_ANIMATION_IDS = {
+	Idle = "rbxassetid://507766666",
+	Walk = "rbxassetid://507777826",
+	Jump = "rbxassetid://507765000",
+}
+
+local DEBUG_LOGS = true
+local DEBUG_INTERVAL = 0.4
+local STUCK_SPEED_THRESHOLD = 1.2
+local STUCK_TIME_THRESHOLD = 0.7
+
+local inputState = {
+	W = false,
+	A = false,
+	S = false,
+	D = false,
+}
+
+local surfaceForward = nil
+local cameraPlanarForward = nil
+local debugTimeAcc = 0
+local stuckTimeAcc = 0
+local warnedInsideSphere = false
+local desiredRadiusFromCenter = nil
+local cameraYawDelta = 0
+local cameraPitch = math.rad(8)
+local isRightMouseDown = false
+local jumpRequested = false
+local lastJumpTime = -100
+local lastUpVector = Vector3.new(0, 1, 0)
+local planetScanAcc = PLANET_SCAN_INTERVAL
+local activePlanetData = nil
+local hasSnappedToSurface = false
+local isFlyMode = false
+local flyUp = false
+local flyDown = false
+
+local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator")
+animator.Parent = humanoid
+local animationTracks = {}
+local currentAnimationName = nil
+
+local groundRayParams = RaycastParams.new()
+groundRayParams.FilterType = Enum.RaycastFilterType.Exclude
+groundRayParams.FilterDescendantsInstances = {character}
+groundRayParams.IgnoreWater = true
+
+--[[
+Funcion: tryResolveActivePlanet
+
+Proposito:
+Resuelve el planeta activo segun la posicion del jugador y zonas de influencia.
+
+Precondiciones:
+- PlanetRegistry.getBestPlanetForPosition debe existir.
+
+Requiere:
+- Planetas en Workspace/Planets o fallback Workspace/Planet.
+
+Devuelve:
+- boolean indicando si hay planeta activo.
+]]
+local function tryResolveActivePlanet()
+	local bestPlanet = PlanetRegistry.getBestPlanetForPosition(hrp.Position, workspace)
+	if not bestPlanet then
+		if activePlanetData then
+			warn("PlanetGravityController: sin planeta activo, gravedad desactivada temporalmente")
+		end
+		activePlanetData = nil
+		desiredRadiusFromCenter = nil
+		warnedInsideSphere = false
+		hasSnappedToSurface = false
+		return false
+	end
+
+	if not activePlanetData or activePlanetData.model ~= bestPlanet.model then
+		warn("PlanetGravityController: planeta activo -> " .. bestPlanet.model.Name)
+		activePlanetData = bestPlanet
+		desiredRadiusFromCenter = bestPlanet.radius + bestPlanet.surfaceOffset
+		warnedInsideSphere = false
+		hasSnappedToSurface = false
+	else
+		activePlanetData = bestPlanet
+		if not desiredRadiusFromCenter then
+			desiredRadiusFromCenter = bestPlanet.radius + bestPlanet.surfaceOffset
+		end
+	end
+
+	return true
+end
+
+--[[
+Funcion: updateKey
+
+Proposito:
+Actualiza el estado de teclas WASD para construir movimiento local.
+
+Precondiciones:
+- keyCode debe venir de UserInputService.
+
+Requiere:
+- inputState inicializado.
+
+Devuelve:
+- nil
+]]
+local function updateKey(keyCode, value)
+	if keyCode == Enum.KeyCode.W then inputState.W = value end
+	if keyCode == Enum.KeyCode.A then inputState.A = value end
+	if keyCode == Enum.KeyCode.S then inputState.S = value end
+	if keyCode == Enum.KeyCode.D then inputState.D = value end
+end
+
+--[[
+Funcion: getLocalMoveVector
+
+Proposito:
+Convierte estado WASD a un vector local normalizado.
+
+Precondiciones:
+- inputState actualizado por eventos de teclado.
+
+Requiere:
+- Ninguno.
+
+Devuelve:
+- Vector3 local.
+]]
+local function getLocalMoveVector()
+	local x = (inputState.D and 1 or 0) - (inputState.A and 1 or 0)
+	local z = (inputState.S and 1 or 0) - (inputState.W and 1 or 0)
+	local v = Vector3.new(x, 0, z)
+	if v.Magnitude > 1 then
+		v = v.Unit
+	end
+	return v
+end
+
+--[[
+Funcion: getProjectedUnit
+
+Proposito:
+Proyecta un vector en la tangente y lo normaliza si su magnitud es valida.
+
+Precondiciones:
+- vector y upVector deben ser Vector3 validos.
+
+Requiere:
+- PlanetGravityMath.projectOnTangent disponible.
+
+Devuelve:
+- Vector3 unitario o nil si no hay direccion valida.
+]]
+local function getProjectedUnit(vector, upVector)
+	local projected = PlanetGravityMath.projectOnTangent(vector, upVector)
+	if projected.Magnitude < 1e-5 then
+		return nil
+	end
+	return projected.Unit
+end
+
+--[[
+Funcion: getGroundHit
+
+Proposito:
+Detecta suelo local en direccion de gravedad para estabilizar estados y adhesion.
+
+Precondiciones:
+- hrp y gravityDir deben ser validos.
+
+Requiere:
+- Workspace con colision del planeta habilitada.
+
+Devuelve:
+- RaycastResult o nil.
+]]
+local function getGroundHit(gravityDir)
+	local hit = workspace:Raycast(hrp.Position, gravityDir * GROUND_RAY_LENGTH, groundRayParams)
+	if not hit then
+		return nil
+	end
+	if not activePlanetData or not activePlanetData.model then
+		return nil
+	end
+	if hit.Instance and hit.Instance:IsDescendantOf(activePlanetData.model) then
+		if desiredRadiusFromCenter and activePlanetData.gravityCenter then
+			local hitRadius = (hit.Position - activePlanetData.gravityCenter.Position).Magnitude
+			if hitRadius > (activePlanetData.radius + 60) then
+				return nil
+			end
+		end
+		return hit
+	end
+	return nil
+end
+
+--[[
+Funcion: isNearSurface
+
+Proposito:
+Determina si el personaje esta suficientemente cerca de la superficie objetivo.
+
+Precondiciones:
+- centerDistance y desiredRadiusFromCenter deben ser numeros validos.
+
+Requiere:
+- Ninguno.
+
+Devuelve:
+- boolean.
+]]
+local function isNearSurface(centerDistance)
+	if not desiredRadiusFromCenter then
+		return false
+	end
+	return math.abs(centerDistance - desiredRadiusFromCenter) <= SURFACE_NEAR_BAND
+end
+
+--[[
+Funcion: updateOrbitCamera
+
+Proposito:
+Actualiza la camara third-person alrededor del personaje usando un up vector dado.
+
+Precondiciones:
+- upVector debe ser un Vector3 valido.
+
+Requiere:
+- camera y hrp disponibles.
+
+Devuelve:
+- Vector3 con la direccion forward usada por la camara.
+]]
+local function updateOrbitCamera(upVector, dt)
+	if not cameraPlanarForward then
+		cameraPlanarForward = getProjectedUnit(hrp.CFrame.LookVector, upVector) or Vector3.new(0, 0, -1)
+	end
+
+	if math.abs(cameraYawDelta) > 1e-6 then
+		local yawCFrame = CFrame.fromAxisAngle(upVector, cameraYawDelta)
+		local rotated = yawCFrame:VectorToWorldSpace(cameraPlanarForward)
+		local projected = getProjectedUnit(rotated, upVector)
+		if projected then
+			if cameraPlanarForward and projected:Dot(cameraPlanarForward) < 0 then
+				projected = -projected
+			end
+			cameraPlanarForward = projected
+		end
+		cameraYawDelta = 0
+	else
+		local projected = getProjectedUnit(cameraPlanarForward, upVector)
+		if projected then
+			if cameraPlanarForward and projected:Dot(cameraPlanarForward) < 0 then
+				projected = -projected
+			end
+			cameraPlanarForward = projected
+		end
+	end
+
+	local cameraLookDirection = ((cameraPlanarForward * math.cos(cameraPitch)) + (upVector * math.sin(cameraPitch))).Unit
+	local lookTarget = hrp.Position + upVector * CAMERA_LOOK_OFFSET
+	local desiredCameraPos = lookTarget - cameraLookDirection * CAMERA_DISTANCE + upVector * CAMERA_HEIGHT
+	local desiredCameraCFrame = CFrame.lookAt(desiredCameraPos, lookTarget, upVector)
+	local cameraBlend = math.clamp(CAMERA_SMOOTH * dt, 0, 1)
+	camera.CFrame = camera.CFrame:Lerp(desiredCameraCFrame, cameraBlend)
+	return cameraLookDirection
+end
+
+--[[
+Funcion: getAnimationId
+
+Proposito:
+Obtiene el AnimationId desde fuentes externas y aplica fallback.
+
+Precondiciones:
+- animationName debe ser "Idle", "Walk" o "Jump".
+
+Requiere:
+- Animator en el Humanoid.
+
+Devuelve:
+- string con AnimationId valido o nil.
+]]
+local function getAnimationId(animationName)
+	-- Fuente 1: carpeta recomendada ReplicatedStorage/Animations
+	local animationsFolder = ReplicatedStorage:FindFirstChild("Animations")
+	if animationsFolder then
+		local animationObject = animationsFolder:FindFirstChild(animationName)
+		if animationObject and animationObject:IsA("Animation") and animationObject.AnimationId ~= "" then
+			return animationObject.AnimationId
+		end
+	end
+
+	-- Fuente 2: script Animate copiado en ReplicatedStorage (solo como contenedor de assets)
+	local animateScript = ReplicatedStorage:FindFirstChild("Animate")
+	if animateScript then
+		local folderName = "walk"
+		if animationName == "Idle" then
+			folderName = "idle"
+		elseif animationName == "Jump" then
+			folderName = "jump"
+		end
+		local animationSetFolder = animateScript:FindFirstChild(folderName)
+		if animationSetFolder then
+			for _, child in ipairs(animationSetFolder:GetChildren()) do
+				if child:IsA("Animation") and child.AnimationId ~= "" then
+					return child.AnimationId
+				end
+			end
+		end
+	end
+
+	return DEFAULT_ANIMATION_IDS[animationName]
+end
+
+--[[
+Funcion: ensureTrack
+
+Proposito:
+Carga una pista de animacion si aun no existe en cache.
+
+Precondiciones:
+- name debe existir en DEFAULT_ANIMATION_IDS o en ReplicatedStorage/Animations.
+
+Requiere:
+- animator valido.
+
+Devuelve:
+- AnimationTrack o nil.
+]]
+local function ensureTrack(name)
+	if animationTracks[name] then
+		return animationTracks[name]
+	end
+
+	local animationId = getAnimationId(name)
+	if not animationId then
+		warn("PlanetGravityController: no se encontro AnimationId para " .. name)
+		return nil
+	end
+
+	local animation = Instance.new("Animation")
+	animation.AnimationId = animationId
+
+	local ok, track = pcall(function()
+		return animator:LoadAnimation(animation)
+	end)
+
+	if not ok or not track then
+		warn("PlanetGravityController: no se pudo cargar animacion " .. name)
+		return nil
+	end
+
+	if name == "Jump" then
+		track.Priority = Enum.AnimationPriority.Action
+	else
+		track.Priority = Enum.AnimationPriority.Movement
+	end
+	animationTracks[name] = track
+	return track
+end
+
+--[[
+Funcion: playLocomotionAnimation
+
+Proposito:
+Reproduce animacion Idle/Walk/Jump de forma manual segun estado de movimiento.
+
+Precondiciones:
+- tangentSpeed, isGrounded y radialSpeed calculados por frame.
+
+Requiere:
+- Tracks cargadas o fallback disponible.
+
+Devuelve:
+- nil
+]]
+local function playLocomotionAnimation(tangentSpeed, isGrounded, radialSpeed)
+	local targetName = "Idle"
+	if not isGrounded and radialSpeed > 2 then
+		targetName = "Jump"
+	elseif isGrounded and tangentSpeed > 1.5 and getLocalMoveVector().Magnitude > 0.1 then
+		targetName = "Walk"
+	end
+
+	if currentAnimationName ~= targetName then
+		for name, track in pairs(animationTracks) do
+			if track.IsPlaying and name ~= targetName then
+				track:Stop(0.15)
+			end
+		end
+
+		local targetTrack = ensureTrack(targetName)
+		if targetTrack and not targetTrack.IsPlaying then
+			targetTrack:Play(0.15)
+		end
+		currentAnimationName = targetName
+	end
+
+	if targetName == "Walk" then
+		local walkTrack = ensureTrack("Walk")
+		if walkTrack then
+			local speedScale = math.clamp(tangentSpeed / MOVE_SPEED, 0.65, 1.4)
+			walkTrack:AdjustSpeed(speedScale)
+		end
+	end
+end
+
+--[[
+Funcion: clearMovementInput
+
+Proposito:
+Limpia estados de input para evitar teclas "pegadas" cuando se pierde foco o al alternar modos.
+
+Precondiciones:
+- inputState inicializado.
+
+Requiere:
+- Ninguno.
+
+Devuelve:
+- nil.
+]]
+local function clearMovementInput()
+	inputState.W = false
+	inputState.A = false
+	inputState.S = false
+	inputState.D = false
+	flyUp = false
+	flyDown = false
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+	if TEST_FLY_ENABLED and input.KeyCode == TEST_FLY_TOGGLE_KEY then
+		isFlyMode = not isFlyMode
+		if isFlyMode then
+			warn("PlanetGravityController: TEST FLY ON")
+			humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+			clearMovementInput()
+		else
+			warn("PlanetGravityController: TEST FLY OFF")
+			tryResolveActivePlanet()
+			if not activePlanetData then
+				hrp.AssemblyLinearVelocity = Vector3.zero
+			end
+			hasSnappedToSurface = false
+			clearMovementInput()
+		end
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isRightMouseDown = true
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.Space then
+		if isFlyMode then
+			flyUp = true
+			return
+		end
+		jumpRequested = true
+	end
+	if isFlyMode and (input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.C) then
+		flyDown = true
+		return
+	end
+	updateKey(input.KeyCode, true)
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isRightMouseDown = false
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.Space then
+		flyUp = false
+	end
+	if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.C then
+		flyDown = false
+	end
+	updateKey(input.KeyCode, false)
+end)
+
+UserInputService.InputChanged:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseMovement and isRightMouseDown then
+		cameraYawDelta -= input.Delta.X * CAMERA_MOUSE_SENSITIVITY
+		cameraPitch = math.clamp(
+			cameraPitch - (input.Delta.Y * CAMERA_MOUSE_SENSITIVITY),
+			CAMERA_PITCH_MIN,
+			CAMERA_PITCH_MAX
+		)
+	end
+end)
+
+UserInputService.WindowFocusReleased:Connect(function()
+	clearMovementInput()
+end)
+
+humanoid.AutoRotate = false
+camera.CameraType = Enum.CameraType.Scriptable
+
+--[[
+Funcion: disableHumanoidLocomotion
+
+Proposito:
+Desactiva completamente la locomocion interna del Humanoid para evitar
+conflictos con el controlador de gravedad planetaria.
+
+Precondiciones:
+- humanoid debe existir.
+- El movimiento debe ser controlado 100% por fisica custom.
+
+Requiere:
+- Ejecutarse una sola vez al iniciar el script.
+
+Devuelve:
+- nil
+]]
+local function disableHumanoidLocomotion()
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+	humanoid.AutoRotate = false
+
+	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+end
+
+disableHumanoidLocomotion()
+tryResolveActivePlanet()
+
+RunService.RenderStepped:Connect(function(dt)
+	planetScanAcc += dt
+	if planetScanAcc >= PLANET_SCAN_INTERVAL then
+		planetScanAcc = 0
+		tryResolveActivePlanet()
+	end
+
+	if isFlyMode then
+		local upVector = lastUpVector
+		local cameraForward = updateOrbitCamera(upVector, dt)
+		local cameraRight = cameraForward:Cross(upVector)
+		if cameraRight.Magnitude < 1e-5 then
+			cameraRight = camera.CFrame.RightVector
+		else
+			cameraRight = cameraRight.Unit
+		end
+
+		local flyDir = Vector3.zero
+		if inputState.W then flyDir += cameraForward end
+		if inputState.S then flyDir -= cameraForward end
+		if inputState.D then flyDir += cameraRight end
+		if inputState.A then flyDir -= cameraRight end
+		if flyUp then flyDir += upVector end
+		if flyDown then flyDir -= upVector end
+
+		if flyDir.Magnitude > 1 then
+			flyDir = flyDir.Unit
+		end
+
+		local flySpeed = TEST_FLY_SPEED
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+			flySpeed *= TEST_FLY_FAST_MULT
+		end
+
+		hrp.AssemblyLinearVelocity = flyDir * flySpeed
+		hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + cameraForward, upVector)
+		playLocomotionAnimation(0, false, 0)
+		return
+	end
+
+	if not activePlanetData then
+		local dampFactor = math.clamp(1 - (SPACE_LINEAR_DAMPING * dt), 0, 1)
+		hrp.AssemblyLinearVelocity *= dampFactor
+
+		local upVector = lastUpVector
+		updateOrbitCamera(upVector, dt)
+		return
+	end
+
+	local gravityCenter = activePlanetData.gravityCenter
+	local gravityAccel = activePlanetData.gravityAccel
+	local planetRadius = activePlanetData.radius
+	if not gravityCenter or not gravityCenter.Parent then
+		activePlanetData = nil
+		return
+	end
+
+	-- Direccion hacia centro de gravedad
+	local gravityDir = PlanetGravityMath.getGravityDirection(hrp.Position, gravityCenter.Position)
+	local upVector = -gravityDir
+	lastUpVector = upVector
+
+	-- Construye una base estable para evitar flips bruscos al pasar polos.
+	if not surfaceForward then
+		surfaceForward = getProjectedUnit(hrp.CFrame.LookVector, upVector)
+		if not surfaceForward then
+			surfaceForward = getProjectedUnit(Vector3.new(0, 0, -1), upVector)
+		end
+	end
+
+	if not cameraPlanarForward then
+		cameraPlanarForward = surfaceForward
+	end
+
+	updateOrbitCamera(upVector, dt)
+
+	local cameraRight = cameraPlanarForward:Cross(upVector)
+	if cameraRight.Magnitude < 1e-5 then
+		cameraRight = getProjectedUnit(hrp.CFrame.RightVector, upVector)
+	else
+		cameraRight = cameraRight.Unit
+	end
+	if not cameraRight then
+		return
+	end
+
+	-- Fuerza consistencia con el eje right real de la camara para evitar inversion A/D.
+	local observedCameraRight = getProjectedUnit(camera.CFrame.RightVector, upVector)
+	if observedCameraRight and cameraRight:Dot(observedCameraRight) < 0 then
+		cameraRight = -cameraRight
+	end
+	cameraPlanarForward = upVector:Cross(cameraRight).Unit
+
+	local localMove = getLocalMoveVector()
+	local desiredMove = (cameraRight * localMove.X) + (cameraPlanarForward * -localMove.Z)
+	local groundHit = getGroundHit(gravityDir)
+	local centerDistance = (hrp.Position - gravityCenter.Position).Magnitude
+	if groundHit and desiredRadiusFromCenter then
+		local hitRadius = (groundHit.Position - gravityCenter.Position).Magnitude
+		local desiredFromHit = hitRadius + activePlanetData.surfaceOffset
+		local surfaceBlend = math.clamp(SURFACE_RADIUS_BLEND * dt, 0, 1)
+		desiredRadiusFromCenter = desiredRadiusFromCenter + ((desiredFromHit - desiredRadiusFromCenter) * surfaceBlend)
+	end
+	local isGrounded = (groundHit ~= nil) or isNearSurface(centerDistance)
+
+	local facingTarget = surfaceForward
+	if desiredMove.Magnitude > 0 then
+		facingTarget = desiredMove.Unit
+	end
+
+	local facingBlend = math.clamp(FACING_RESPONSE * dt, 0, 1)
+	local blendedFacing = surfaceForward:Lerp(facingTarget, facingBlend)
+	local projectedFacing = getProjectedUnit(blendedFacing, upVector)
+	if projectedFacing then
+		if surfaceForward and projectedFacing:Dot(surfaceForward) < 0 then
+			projectedFacing = -projectedFacing
+		end
+		surfaceForward = projectedFacing
+	end
+
+	local rightVector = surfaceForward:Cross(upVector)
+	if rightVector.Magnitude < 1e-5 then
+		rightVector = getProjectedUnit(hrp.CFrame.RightVector, upVector)
+	else
+		rightVector = rightVector.Unit
+	end
+	if not rightVector then
+		return
+	end
+
+	surfaceForward = upVector:Cross(rightVector).Unit
+	hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + surfaceForward, upVector)
+
+	-- Movimiento tangencial con velocidad objetivo para evitar acumulacion inestable.
+	desiredMove = (cameraRight * localMove.X) + (cameraPlanarForward * -localMove.Z)
+
+	local currentVel = hrp.AssemblyLinearVelocity
+	local radialSpeed = currentVel:Dot(upVector)
+	local radialVel = upVector * radialSpeed
+	local tangentVel = currentVel - radialVel
+
+	local targetTangent = Vector3.zero
+	if desiredMove.Magnitude > 0 then
+		targetTangent = desiredMove.Unit * MOVE_SPEED
+	end
+
+	local response = MOVE_RESPONSE
+	if localMove.Magnitude <= 0 then
+		response *= NO_INPUT_RESPONSE_MULT
+	end
+
+	local blend = math.clamp(response * dt, 0, 1)
+	local newTangent = tangentVel:Lerp(targetTangent, blend)
+	if localMove.Magnitude <= 0 then
+		local brakeBlend = math.clamp(IDLE_TANGENT_BRAKE * dt, 0, 1)
+		newTangent = newTangent:Lerp(Vector3.zero, brakeBlend)
+		if newTangent.Magnitude < 0.35 then
+			newTangent = Vector3.zero
+		end
+	end
+	if newTangent.Magnitude > MAX_TANGENT_SPEED then
+		newTangent = newTangent.Unit * MAX_TANGENT_SPEED
+	end
+
+	local radialError = desiredRadiusFromCenter - centerDistance
+
+	if not hasSnappedToSurface and math.abs(radialError) > MAX_SPAWN_RADIAL_ERROR then
+		local snappedPosition = gravityCenter.Position + (upVector * desiredRadiusFromCenter)
+		hrp.CFrame = CFrame.lookAt(snappedPosition, snappedPosition + surfaceForward, upVector)
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hasSnappedToSurface = true
+		return
+	end
+
+	-- Control radial tipo resorte-amortiguador para mantener al personaje pegado a la esfera.
+	local radialAccel = -gravityAccel + (radialError * SURFACE_SPRING) - (radialSpeed * SURFACE_DAMPING)
+	local newRadialSpeed = radialSpeed + radialAccel * dt
+	newRadialSpeed = math.clamp(newRadialSpeed, -MAX_RADIAL_SPEED, MAX_RADIAL_SPEED)
+	if centerDistance > (desiredRadiusFromCenter + 5) then
+		newRadialSpeed = math.min(newRadialSpeed, 0)
+	end
+
+	if jumpRequested and isGrounded and (os.clock() - lastJumpTime) >= JUMP_COOLDOWN then
+		newRadialSpeed = math.max(newRadialSpeed, JUMP_IMPULSE)
+		lastJumpTime = os.clock()
+	end
+	jumpRequested = false
+
+	-- Evita deriva cuando no hay input: elimina velocidades residuales al estar en suelo.
+	if localMove.Magnitude <= 0 and isGrounded then
+		if newTangent.Magnitude < IDLE_TANGENT_LOCK_SPEED then
+			newTangent = Vector3.zero
+		end
+		if math.abs(newRadialSpeed) < IDLE_RADIAL_LOCK_SPEED then
+			newRadialSpeed = 0
+		end
+	end
+
+	local newVel = (upVector * newRadialSpeed) + newTangent
+	hrp.AssemblyLinearVelocity = newVel
+
+	local tangentSpeed = newTangent.Magnitude
+	local inputMag = localMove.Magnitude
+
+	if inputMag > 0 and tangentSpeed < STUCK_SPEED_THRESHOLD then
+		stuckTimeAcc += dt
+	else
+		stuckTimeAcc = 0
+	end
+
+	local hrpInsideDepth = 0
+	if planetRadius then
+		hrpInsideDepth = math.max(0, planetRadius - centerDistance)
+	end
+
+	if hrpInsideDepth > 0.5 and not warnedInsideSphere then
+		warnedInsideSphere = true
+		warn(string.format("PlanetGravityController: HRP esta entrando en esfera (depth=%.2f)", hrpInsideDepth))
+	elseif hrpInsideDepth <= 0.1 then
+		warnedInsideSphere = false
+	end
+
+	if stuckTimeAcc >= STUCK_TIME_THRESHOLD then
+		warn(string.format(
+			"PlanetGravityController: posible atoro detectado | input=%.2f tangentSpeed=%.2f radialSpeed=%.2f centerDist=%.2f insideDepth=%.2f grounded=%s humanoidState=%s",
+			inputMag,
+			tangentSpeed,
+			math.abs(newRadialSpeed),
+			centerDistance,
+			hrpInsideDepth,
+			tostring(isGrounded),
+			tostring(humanoid:GetState())
+			))
+		stuckTimeAcc = 0
+	end
+
+	if DEBUG_LOGS then
+		debugTimeAcc += dt
+		if debugTimeAcc >= DEBUG_INTERVAL then
+			debugTimeAcc = 0
+			print(string.format(
+				"[PlanetDbg] input=%.2f tang=%.2f rad=%.2f dist=%.2f targetDist=%.2f inside=%.2f grounded=%s moveDir=%.2f floor=%s",
+				inputMag,
+				tangentSpeed,
+				math.abs(newRadialSpeed),
+				centerDistance,
+				desiredRadiusFromCenter,
+				hrpInsideDepth,
+				tostring(isGrounded),
+				humanoid.MoveDirection.Magnitude,
+				tostring(humanoid.FloorMaterial)
+				))
+		end
+	end
+
+	playLocomotionAnimation(tangentSpeed, isGrounded, newRadialSpeed)
+
+	-- Camara fija en tercera persona alineada al personaje y al up local del planeta.
+	updateOrbitCamera(upVector, dt)
+
+	-- Movimiento y orientacion quedan controlados exclusivamente por fisica custom.
+end)

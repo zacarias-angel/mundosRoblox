@@ -13,6 +13,9 @@
     EVENTOS CREADOS:
     - CombatSubmit : Cliente → Servidor  (envío de cadena de celdas)
     - CombatSync   : Servidor → Cliente  (estado del tablero / resultado del turno)
+    - CombatChallengeRequest  : Cliente → Servidor  (desafiar jugador cercano)
+    - CombatChallengeResponse : Cliente → Servidor  (aceptar/rechazar desafío)
+    - CombatDuelState         : Servidor → Cliente  (estado de countdown, inicio y fin)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -69,3 +72,6 @@ local remoteEventsFolder = ensureFolder(ReplicatedStorage, "RemoteEvents")
 
 ensureRemoteEvent(remoteEventsFolder, "CombatSubmit")
 ensureRemoteEvent(remoteEventsFolder, "CombatSync")
+ensureRemoteEvent(remoteEventsFolder, "CombatChallengeRequest")
+ensureRemoteEvent(remoteEventsFolder, "CombatChallengeResponse")
+ensureRemoteEvent(remoteEventsFolder, "CombatDuelState")

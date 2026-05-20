@@ -647,7 +647,14 @@ local function bindChallengePrompts()
     -- Retorna: nil
     for _, otherPlayer in ipairs(Players:GetPlayers()) do
         if otherPlayer ~= player then
-            ensureChallengePromptForPlayer(otherPlayer)
+            -- Intentar ahora y también con delay por si el personaje aún no replicó
+            task.spawn(function()
+                ensureChallengePromptForPlayer(otherPlayer)
+                if not (otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart")) then
+                    task.wait(1)
+                    ensureChallengePromptForPlayer(otherPlayer)
+                end
+            end)
             otherPlayer.CharacterAdded:Connect(function()
                 task.wait(0.1)
                 ensureChallengePromptForPlayer(otherPlayer)
@@ -660,7 +667,13 @@ local function bindChallengePrompts()
             return
         end
 
-        ensureChallengePromptForPlayer(otherPlayer)
+        task.spawn(function()
+            ensureChallengePromptForPlayer(otherPlayer)
+            if not (otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart")) then
+                task.wait(1)
+                ensureChallengePromptForPlayer(otherPlayer)
+            end
+        end)
         otherPlayer.CharacterAdded:Connect(function()
             task.wait(0.1)
             ensureChallengePromptForPlayer(otherPlayer)
@@ -677,6 +690,12 @@ bindChallengePrompts()
 resetDuelHud()
 setGridInputEnabled(false)
 topHud.Visible = false
+
+task.delay(3, function()
+    if duelStatusLabel.Text == "Acercate a otro jugador y usa el prompt para desafiar" then
+        duelStatusLabel.Text = ""
+    end
+end)
 
 
 if IS_TOUCH_DEVICE and workspace.CurrentCamera then
@@ -1575,12 +1594,22 @@ CombatDuelState.OnClientEvent:Connect(function(data)
     end
 
     if data.type == "challenge-sent" then
-        duelStatusLabel.Text = "Esperando respuesta de " .. tostring(data.targetName)
+        duelStatusLabel.Text = "Desafio enviado a " .. tostring(data.targetName)
+        task.delay(3, function()
+            if duelStatusLabel.Text == "Desafio enviado a " .. tostring(data.targetName) then
+                duelStatusLabel.Text = ""
+            end
+        end)
         return
     end
 
     if data.type == "challenge-declined" then
         duelStatusLabel.Text = tostring(data.targetName) .. " rechazo el desafio"
+        task.delay(3, function()
+            if duelStatusLabel.Text == tostring(data.targetName) .. " rechazo el desafio" then
+                duelStatusLabel.Text = ""
+            end
+        end)
         return
     end
 
@@ -1588,11 +1617,22 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         challengePrompt.Visible = false
         pendingChallengerUserId = nil
         duelStatusLabel.Text = "El desafio expiro"
+        task.delay(3, function()
+            if duelStatusLabel.Text == "El desafio expiro" then
+                duelStatusLabel.Text = ""
+            end
+        end)
         return
     end
 
     if data.type == "challenge-failed" then
-        duelStatusLabel.Text = "No se pudo iniciar desafio: " .. tostring(data.reason)
+        local msg = "No se pudo iniciar desafio: " .. tostring(data.reason)
+        duelStatusLabel.Text = msg
+        task.delay(3, function()
+            if duelStatusLabel.Text == msg then
+                duelStatusLabel.Text = ""
+            end
+        end)
         return
     end
 
@@ -1627,6 +1667,19 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         return
     end
 
+    if data.type == "monster-attack" then
+        -- Propósito: Mostrar el ataque del monstruo NPC en la UI y actualizar barras de HP.
+        -- Precondiciones:
+        --   1. data debe tener element, comboCount, damage, selfHP, enemyHP, opponentName.
+        -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+        updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
+        duelStatusLabel.Text = tostring(data.opponentName)
+            .. " ataco con " .. tostring(data.element)
+            .. " x" .. tostring(data.comboCount)
+            .. "  (-" .. tostring(data.damage) .. " hp)"
+        return
+    end
+
     if data.type == "duel-ended" then
         duelActive = false
         duelStarted = false
@@ -1639,13 +1692,20 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         countdownLabel.Text = ""
         resetDuelHud()
         refreshGridVisibility()
+        local endMsg
         if type(data.winnerUserId) == "number" and data.winnerUserId == player.UserId then
-            duelStatusLabel.Text = "Victoria"
+            endMsg = "Victoria"
         elseif type(data.winnerUserId) == "number" then
-            duelStatusLabel.Text = "Derrota"
+            endMsg = "Derrota"
         else
-            duelStatusLabel.Text = "Combate finalizado"
+            endMsg = "Combate finalizado"
         end
+        duelStatusLabel.Text = endMsg
+        task.delay(3, function()
+            if duelStatusLabel.Text == endMsg then
+                duelStatusLabel.Text = ""
+            end
+        end)
         return
     end
 end)

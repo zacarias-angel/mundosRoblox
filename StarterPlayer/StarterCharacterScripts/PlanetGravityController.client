@@ -248,6 +248,9 @@ local NO_INPUT_RESPONSE_MULT = 1.8
 local MAX_TANGENT_SPEED = 36
 local IDLE_TANGENT_LOCK_SPEED = 0.85
 local IDLE_RADIAL_LOCK_SPEED = 0.65
+local IDLE_SURFACE_LOCK_EPSILON = 0.04
+local IDLE_HARD_LOCK_SPEED = 1.2
+local IDLE_HARD_LOCK_RADIUS_BAND = 0.55
 local JUMP_IMPULSE = 58
 local JUMP_COOLDOWN = 0.22
 local TARGET_SURFACE_OFFSET = 3.9
@@ -437,10 +440,11 @@ Devuelve:
 ]]
 local function getProjectedUnit(vector, upVector)
 	local projected = PlanetGravityMath.projectOnTangent(vector, upVector)
-	if projected.Magnitude < 1e-5 then
-		return nil
+	if not projected or projected.Magnitude < 1e-5 then
+		warn("PlanetGravityController: Proyección tangencial inválida, usando fallback")
+		projected = Vector3.zero
 	end
-	return projected.Unit
+	return projected
 end
 
 --[[
@@ -884,6 +888,10 @@ RunService.RenderStepped:Connect(function(dt)
 
 	-- Direccion hacia centro de gravedad
 	local gravityDir = PlanetGravityMath.getGravityDirection(hrp.Position, gravityCenter.Position)
+	if gravityDir == Vector3.zero then
+		warn("PlanetGravityController: Dirección de gravedad inválida, usando fallback")
+		gravityDir = Vector3.new(0, -1, 0)
+	end
 	local upVector = -gravityDir
 	lastUpVector = upVector
 
@@ -1011,15 +1019,20 @@ RunService.RenderStepped:Connect(function(dt)
 		newRadialSpeed = math.max(newRadialSpeed, JUMP_IMPULSE)
 		lastJumpTime = os.clock()
 	end
+	local wantsJump = jumpRequested
 	jumpRequested = false
 
 	-- Evita deriva cuando no hay input: elimina velocidades residuales al estar en suelo.
 	if localMove.Magnitude <= 0 and isGrounded then
-		if newTangent.Magnitude < IDLE_TANGENT_LOCK_SPEED then
-			newTangent = Vector3.zero
-		end
-		if math.abs(newRadialSpeed) < IDLE_RADIAL_LOCK_SPEED then
+		if math.abs(radialError) < IDLE_SURFACE_LOCK_EPSILON then
 			newRadialSpeed = 0
+			local lockedPosition = gravityCenter.Position + (upVector * desiredRadiusFromCenter)
+			hrp.CFrame = CFrame.lookAt(lockedPosition, lockedPosition + surfaceForward, upVector)
+			hrp.AssemblyLinearVelocity = Vector3.zero
+			hrp.AssemblyAngularVelocity = Vector3.zero
+			playLocomotionAnimation(0, true, 0)
+			updateOrbitCamera(upVector, dt)
+			return
 		end
 	end
 

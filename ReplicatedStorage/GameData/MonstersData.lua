@@ -59,4 +59,15 @@ Monsters.GolemRoca = {
     },
 }
 
+Monsters.Demonslime1 = {
+    Name = "Demon Slime",
+    Element = "Fuego",
+    Rarity = "Rare",
+    BaseStats = {
+        Attack = 200,
+        HP = 5000,
+        Speed = 1,
+    },
+}
+
 return Monsters

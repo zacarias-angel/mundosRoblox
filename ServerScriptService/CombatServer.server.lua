@@ -16,6 +16,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local CombatGrid = require(Modules:WaitForChild("CombatGrid.module"))
@@ -48,7 +49,13 @@ local playerStates = {}
 local characterConnections = {}
 local pendingChallenges = {}
 local activeDuels = {}
+local activeMonsterDuels = {}
 local duelSequence = 0
+
+local ELEMENTS_LIST = { "Fuego", "Agua", "Planta", "Electricidad" }
+local MONSTER_CHALLENGE_DISTANCE = 15
+local MONSTER_AI_ATTACK_INTERVAL = 4
+local MONSTER_TEAM_SIZE = 5
 
 local function dbg(message)
     -- Propósito: Emitir logs de depuración del servidor de combate.
@@ -441,6 +448,223 @@ local function initPlayerState(player)
     })
 end
 
+-- ============================================================
+-- SISTEMA DE DUELO CONTRA MONSTRUO NPC
+-- ============================================================
+
+local function buildMonsterNpcTeam(monsterId, size)
+    -- Propósito: Construir un equipo NPC de (size) monstruos del mismo tipo.
+    -- Precondiciones:
+    --   1. monsterId debe existir en MonstersData.
+    --   2. size debe ser number positivo.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: table
+    local team = {}
+    for i = 1, size do
+        table.insert(team, { MonsterId = monsterId })
+    end
+    return team
+end
+
+local function endMonsterDuel(player, reason, winner)
+    -- Propósito: Finalizar duelo contra NPC y notificar resultado al cliente.
+    -- Precondiciones:
+    --   1. player debe estar registrado en activeMonsterDuels.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    local duel = activeMonsterDuels[player]
+    if not duel then return end
+    activeMonsterDuels[player] = nil
+
+    local state = playerStates[player]
+    if state then
+        state.duelId = nil
+        state.duelActive = false
+        state.duelStarted = false
+    end
+
+    local winnerUserId = nil
+    if winner == "player" then
+        winnerUserId = player.UserId
+    end
+
+    sendDuelState(player, {
+        type = "duel-ended",
+        winnerUserId = winnerUserId,
+        reason = reason or "duel-ended",
+    })
+
+    dbg("duelo NPC finalizado: " .. player.Name .. " | razon=" .. tostring(reason) .. " | ganador=" .. tostring(winner))
+end
+
+local function startMonsterAI(player, duel)
+    -- Propósito: Loop IA del monstruo: atacar cada MONSTER_AI_ATTACK_INTERVAL s con elemento+combo random.
+    -- Precondiciones:
+    --   1. duel debe ser duelo NPC activo con started=true.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    task.spawn(function()
+        while activeMonsterDuels[player] == duel and duel.started do
+            task.wait(MONSTER_AI_ATTACK_INTERVAL)
+
+            if activeMonsterDuels[player] ~= duel or not duel.started then
+                break
+            end
+
+            -- Elemento random 1-4 y combo random 1-12
+            local element = ELEMENTS_LIST[math.random(1, #ELEMENTS_LIST)]
+            local comboCount = math.random(1, 12)
+
+            local monsterComboSummary = {
+                totalCombos = comboCount,
+                activatedElements = { [element] = true },
+            }
+
+            local attackResult = MonsterCombat.calculateTeamDamage(duel.monsterTeam, monsterComboSummary)
+            local damage = attackResult.totalDamage
+
+            duel.playerHP = math.max(0, duel.playerHP - damage)
+
+            sendDuelState(player, {
+                type = "monster-attack",
+                monsterName = duel.monsterName,
+                element = element,
+                comboCount = comboCount,
+                damage = damage,
+                selfHP = duel.playerHP,
+                enemyHP = duel.monsterHP,
+                opponentName = duel.monsterName,
+            })
+
+            dbg("NPC ataco a " .. player.Name .. " | " .. element .. " x" .. comboCount .. " = " .. damage .. " | playerHP=" .. duel.playerHP)
+
+            if duel.playerHP <= 0 then
+                endMonsterDuel(player, "hp-depleted", "monster")
+                break
+            end
+        end
+    end)
+end
+
+local function startMonsterDuelCountdown(player, duel)
+    -- Propósito: Ejecutar countdown 3-2-1 antes de iniciar el combate contra el NPC.
+    -- Precondiciones:
+    --   1. duel debe tener started=false y estar activo en activeMonsterDuels.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    task.spawn(function()
+        for seconds = COUNTDOWN_SECONDS, 1, -1 do
+            if activeMonsterDuels[player] ~= duel then return end
+
+            sendDuelState(player, {
+                type = "countdown",
+                value = seconds,
+                opponentName = duel.monsterName,
+                selfHP = duel.playerHP,
+                enemyHP = duel.monsterHP,
+            })
+            task.wait(1)
+        end
+
+        if activeMonsterDuels[player] ~= duel then return end
+
+        duel.started = true
+        local state = playerStates[player]
+        if state then
+            state.duelStarted = true
+        end
+
+        sendDuelState(player, {
+            type = "duel-started",
+            opponentName = duel.monsterName,
+            selfHP = duel.playerHP,
+            enemyHP = duel.monsterHP,
+        })
+
+        startMonsterAI(player, duel)
+    end)
+end
+
+local function onMonsterChallenged(player, monsterModel)
+    -- Propósito: Procesar desafío del jugador a un monstruo NPC via ProximityPrompt.
+    -- Precondiciones:
+    --   1. monsterModel debe ser un Model en Workspace con atributo MonsterId.
+    --   2. El jugador debe estar dentro de MONSTER_CHALLENGE_DISTANCE.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if not player or not monsterModel then return end
+
+    if activeDuels[player] or activeMonsterDuels[player] then
+        sendDuelState(player, { type = "challenge-failed", reason = "duel-busy" })
+        return
+    end
+
+    local playerPos = getRootPosition(player)
+    if not playerPos then return end
+
+    local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart")
+        or monsterModel:FindFirstChildWhichIsA("BasePart", true)
+    if not monsterRoot then
+        warn("[CombatServer] onMonsterChallenged: " .. monsterModel.Name .. " no tiene BasePart")
+        return
+    end
+
+    local dist = (playerPos - monsterRoot.Position).Magnitude
+    if dist > MONSTER_CHALLENGE_DISTANCE then
+        sendDuelState(player, { type = "challenge-failed", reason = "target-too-far" })
+        return
+    end
+
+    local state = playerStates[player]
+    if not state then return end
+
+    local monsterId = monsterModel:GetAttribute("MonsterId") or monsterModel.Name
+    local playerTeam = state.team or TeamManager.getOrCreateTeam(player)
+    local monsterTeam = buildMonsterNpcTeam(monsterId, MONSTER_TEAM_SIZE)
+
+    local isTeamValid = TeamManager.validateTeam(playerTeam)
+    if not isTeamValid then
+        sendDuelState(player, { type = "challenge-failed", reason = "team-invalid" })
+        return
+    end
+
+    local isMonsterTeamValid = TeamManager.validateTeam(monsterTeam)
+    if not isMonsterTeamValid then
+        dbg("MonsterId no encontrado en MonstersData: " .. tostring(monsterId))
+        sendDuelState(player, { type = "challenge-failed", reason = "monster-data-missing" })
+        return
+    end
+
+    local playerHP = TeamManager.calculateTeamHP(playerTeam)
+    local monsterHP = TeamManager.calculateTeamHP(monsterTeam)
+
+    duelSequence += 1
+    local duel = {
+        id = "npc-" .. tostring(duelSequence),
+        player = player,
+        monsterName = monsterModel.Name,
+        monsterId = monsterId,
+        monsterTeam = monsterTeam,
+        playerHP = playerHP,
+        monsterHP = monsterHP,
+        started = false,
+    }
+
+    activeMonsterDuels[player] = duel
+    state.duelId = duel.id
+    state.duelActive = true
+    state.duelStarted = false
+
+    dbg("desafio NPC aceptado: " .. player.Name .. " vs " .. monsterModel.Name .. " (5x " .. monsterId .. ")")
+
+    sendDuelState(player, {
+        type = "challenge-sent",
+        targetName = monsterModel.Name .. " (x5)",
+    })
+
+    startMonsterDuelCountdown(player, duel)
+end
+
 local function cleanPlayerState(player)
     -- Propósito: Liberar estado del jugador al desconectarse.
     -- Precondiciones:
@@ -450,6 +674,10 @@ local function cleanPlayerState(player)
     local opponent, duel = getDuelOpponent(player)
     if duel and opponent then
         endDuel(duel, opponent, "player-left")
+    end
+
+    if activeMonsterDuels[player] then
+        endMonsterDuel(player, "player-left", "monster")
     end
 
     pendingChallenges[player] = nil
@@ -662,8 +890,9 @@ local function onCombatSubmit(player, payload)
         return
     end
 
+    local monsterDuel = activeMonsterDuels[player]
     local opponent, duel = getDuelOpponent(player)
-    if not duel then
+    if not duel and not monsterDuel then
         syncPlayer(player, {
             rejected = true,
             reason = "duel-not-active",
@@ -673,7 +902,13 @@ local function onCombatSubmit(player, payload)
         return
     end
 
-    if not duel.started then
+    local isMonsterDuel = (monsterDuel ~= nil and duel == nil)
+    if isMonsterDuel then
+        if not monsterDuel.started then
+            syncPlayer(player, { rejected = true, reason = "duel-not-started", duelActive = true, duelStarted = false })
+            return
+        end
+    elseif not duel.started then
         syncPlayer(player, {
             rejected = true,
             reason = "duel-not-started",
@@ -776,40 +1011,67 @@ local function onCombatSubmit(player, payload)
     local combatDamage = MonsterCombat.calculateTeamDamage(team, comboSummary)
     local playerTotalHP = TeamManager.calculateTeamHP(team)
 
-    local enemyHP = opponent and (duel.hpByUserId[opponent.UserId] or 0) or nil
-    local selfHP = duel and duel.hpByUserId[player.UserId] or playerTotalHP
+    local enemyHP = nil
+    local selfHP = playerTotalHP
+    if isMonsterDuel then
+        enemyHP = monsterDuel.monsterHP
+        selfHP = monsterDuel.playerHP
+    elseif duel then
+        enemyHP = opponent and (duel.hpByUserId[opponent.UserId] or 0) or nil
+        selfHP = duel.hpByUserId[player.UserId] or playerTotalHP
+    end
     local animationDelay = estimateCascadeAnimationDuration(resolution.cascades)
 
-    if opponent and combatDamage.totalDamage > 0 then
-        task.delay(animationDelay, function()
-            if activeDuels[player] ~= duel or activeDuels[opponent] ~= duel or not duel.started then
-                return
-            end
+    if combatDamage.totalDamage > 0 then
+        if isMonsterDuel then
+            task.delay(animationDelay, function()
+                if activeMonsterDuels[player] ~= monsterDuel or not monsterDuel.started then
+                    return
+                end
+                local nextHP = math.max(0, math.floor(monsterDuel.monsterHP - combatDamage.totalDamage))
+                monsterDuel.monsterHP = nextHP
+                enemyHP = nextHP
+                sendDuelState(player, {
+                    type = "duel-update",
+                    opponentName = monsterDuel.monsterName,
+                    selfHP = monsterDuel.playerHP,
+                    enemyHP = nextHP,
+                    lastDamageDealt = combatDamage.totalDamage,
+                })
+                if nextHP <= 0 then
+                    endMonsterDuel(player, "hp-depleted", "player")
+                end
+            end)
+        elseif opponent then
+            task.delay(animationDelay, function()
+                if activeDuels[player] ~= duel or activeDuels[opponent] ~= duel or not duel.started then
+                    return
+                end
+                local opponentCurrentHP = duel.hpByUserId[opponent.UserId] or 0
+                local nextHP = math.max(0, math.floor(opponentCurrentHP - combatDamage.totalDamage))
+                duel.hpByUserId[opponent.UserId] = nextHP
 
-            local opponentCurrentHP = duel.hpByUserId[opponent.UserId] or 0
-            local nextHP = math.max(0, math.floor(opponentCurrentHP - combatDamage.totalDamage))
-            duel.hpByUserId[opponent.UserId] = nextHP
+                sendDuelState(opponent, {
+                    type = "duel-update",
+                    opponentName = player.Name,
+                    selfHP = duel.hpByUserId[opponent.UserId],
+                    enemyHP = duel.hpByUserId[player.UserId],
+                    lastDamageReceived = combatDamage.totalDamage,
+                })
 
-            sendDuelState(opponent, {
-                type = "duel-update",
-                opponentName = player.Name,
-                selfHP = duel.hpByUserId[opponent.UserId],
-                enemyHP = duel.hpByUserId[player.UserId],
-                lastDamageReceived = combatDamage.totalDamage,
-            })
+                sendDuelState(player, {
+                    type = "duel-update",
+                    opponentName = opponent.Name,
+                    selfHP = duel.hpByUserId[player.UserId],
+                    enemyHP = duel.hpByUserId[opponent.UserId],
+                    lastDamageDealt = combatDamage.totalDamage,
+                })
 
-            sendDuelState(player, {
-                type = "duel-update",
-                opponentName = opponent.Name,
-                selfHP = duel.hpByUserId[player.UserId],
-                enemyHP = duel.hpByUserId[opponent.UserId],
-                lastDamageDealt = combatDamage.totalDamage,
-            })
-
-            if nextHP <= 0 then
-                endDuel(duel, player, "hp-depleted")
-            end
-        end)
+                if nextHP <= 0 then
+                    endDuel(duel, player, "hp-depleted")
+                end
+            end)
+        end
     end
 
     dbg(
@@ -849,7 +1111,7 @@ local function onCombatSubmit(player, payload)
         duelStarted = state.duelStarted,
         selfHP = selfHP,
         enemyHP = enemyHP,
-        opponentName = opponent and opponent.Name or nil,
+        opponentName = isMonsterDuel and monsterDuel.monsterName or (opponent and opponent.Name) or nil,
         reason = resolution.totalEliminadas > 0 and "path-resolved" or "path-no-matches",
     })
 end
@@ -873,3 +1135,36 @@ for _, player in ipairs(Players:GetPlayers()) do
     end
     bindCharacterSpawn(player)
 end
+
+-- ============================================================
+-- ESCUCHAR ACTIVACIÓN DE PROXIMITYPROMPT DE MONSTRUOS NPC
+-- (La creación del prompt está en MonsterPromptSetup.server.lua)
+-- ============================================================
+
+ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
+    -- Propósito: Detectar cuando un jugador activa el prompt de desafío a monstruo.
+    -- Precondiciones:
+    --   1. prompt.Name debe ser "MonsterChallengePrompt".
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if prompt.Name ~= "MonsterChallengePrompt" then return end
+
+    -- Subir la jerarquía para encontrar el Model con IsMonster=true
+    -- (el prompt puede estar en una parte anidada dentro del modelo)
+    local current = prompt.Parent
+    local monsterModel = nil
+    while current and current ~= workspace do
+        if current:IsA("Model") and current:GetAttribute("IsMonster") then
+            monsterModel = current
+            break
+        end
+        current = current.Parent
+    end
+
+    if not monsterModel then
+        warn("[CombatServer] PromptTriggered: no se encontró Model con IsMonster=true para el prompt en " .. tostring(prompt.Parent and prompt.Parent.Name))
+        return
+    end
+
+    onMonsterChallenged(player, monsterModel)
+end)

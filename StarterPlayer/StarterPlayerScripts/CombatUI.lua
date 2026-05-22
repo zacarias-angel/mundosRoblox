@@ -85,6 +85,7 @@ local duelStarted = false
 local duelSelfHP = 0
 local duelEnemyHP = 0
 local duelOpponentName = "Sin oponente"
+local duelOpponentUserId = nil
 local pendingChallengerUserId = nil
 local challengePromptRefs = {}
 
@@ -240,6 +241,45 @@ enemyHPBarFill.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
 enemyHPBarFill.BorderSizePixel = 0
 enemyHPBarFill.Parent = enemyHPBarBg
 Instance.new("UICorner", enemyHPBarFill).CornerRadius = UDim.new(0, 5)
+
+local enemyAvatarFrame = Instance.new("Frame")
+enemyAvatarFrame.Name = "EnemyAvatarFrame"
+enemyAvatarFrame.AnchorPoint = Vector2.new(1, 0)
+enemyAvatarFrame.Position = UDim2.new(1, -20, 0, 20)
+enemyAvatarFrame.Size = UDim2.new(0, 78, 0, 78)
+enemyAvatarFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+enemyAvatarFrame.BackgroundTransparency = 0.15
+enemyAvatarFrame.BorderSizePixel = 0
+enemyAvatarFrame.Visible = false
+enemyAvatarFrame.Parent = screenGui
+enemyAvatarFrame.ZIndex = 20
+Instance.new("UICorner", enemyAvatarFrame).CornerRadius = UDim.new(0, 10)
+
+local enemyAvatarImage = Instance.new("ImageLabel")
+enemyAvatarImage.Name = "EnemyAvatarImage"
+enemyAvatarImage.Position = UDim2.new(0, 4, 0, 4)
+enemyAvatarImage.Size = UDim2.new(1, -8, 1, -8)
+enemyAvatarImage.BackgroundTransparency = 1
+enemyAvatarImage.Image = ""
+enemyAvatarImage.Parent = enemyAvatarFrame
+enemyAvatarImage.ZIndex = 21
+Instance.new("UICorner", enemyAvatarImage).CornerRadius = UDim.new(0, 8)
+
+local enemyAvatarLabel = Instance.new("TextLabel")
+enemyAvatarLabel.Name = "EnemyAvatarLabel"
+enemyAvatarLabel.AnchorPoint = Vector2.new(1, 1)
+enemyAvatarLabel.Position = UDim2.new(1, -6, 1, -4)
+enemyAvatarLabel.Size = UDim2.new(1, -12, 0, 16)
+enemyAvatarLabel.BackgroundTransparency = 0.35
+enemyAvatarLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+enemyAvatarLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+enemyAvatarLabel.TextXAlignment = Enum.TextXAlignment.Right
+enemyAvatarLabel.Font = Enum.Font.GothamBold
+enemyAvatarLabel.TextSize = 12
+enemyAvatarLabel.Text = "Rival"
+enemyAvatarLabel.Parent = enemyAvatarFrame
+enemyAvatarLabel.ZIndex = 22
+Instance.new("UICorner", enemyAvatarLabel).CornerRadius = UDim.new(0, 6)
 
 local duelStatusLabel = Instance.new("TextLabel")
 duelStatusLabel.Name = "DuelStatusLabel"
@@ -481,6 +521,33 @@ local function updateHPHud(selfHP, enemyHP, opponentName)
     enemyHPLabel.Text = "Rival " .. tostring(duelOpponentName) .. ": " .. tostring(duelEnemyHP)
 end
 
+local function updateEnemyAvatar(userId, opponentName)
+    -- Propósito: Mostrar mini avatar del contrincante en esquina superior derecha.
+    -- Precondiciones:
+    --   1. userId puede ser nil o number.
+    --   2. opponentName puede ser nil o string.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    enemyAvatarLabel.Text = tostring(opponentName or "Rival")
+
+    if type(userId) ~= "number" then
+        duelOpponentUserId = nil
+        enemyAvatarImage.Image = ""
+        enemyAvatarFrame.Visible = false
+        return
+    end
+
+    duelOpponentUserId = userId
+    enemyAvatarFrame.Visible = true
+
+    local ok, content = pcall(function()
+        return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+    end)
+    if ok and type(content) == "string" then
+        enemyAvatarImage.Image = content
+    end
+end
+
 local function resetDuelHud()
     -- Propósito: Reiniciar HUD de vida al estado base al terminar un duelo.
     -- Precondiciones: Ninguna.
@@ -489,7 +556,9 @@ local function resetDuelHud()
     duelSelfHP = MAX_DUEL_HP
     duelEnemyHP = MAX_DUEL_HP
     duelOpponentName = "Sin oponente"
+    duelOpponentUserId = nil
     updateHPHud(duelSelfHP, duelEnemyHP, duelOpponentName)
+    updateEnemyAvatar(nil, nil)
 end
 
 local function requestChallengeToPlayer(targetPlayer)
@@ -1643,6 +1712,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         pendingChallengerUserId = nil
         setChallengePromptsEnabled(false)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName)
         countdownLabel.Visible = true
         countdownLabel.Text = tostring(data.value)
         duelStatusLabel.Text = "Combate inicia en " .. tostring(data.value)
@@ -1657,6 +1727,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         countdownLabel.Visible = false
         countdownLabel.Text = ""
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName)
         duelStatusLabel.Text = "Combate iniciado"
         refreshGridVisibility()
         return
@@ -1664,6 +1735,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
 
     if data.type == "duel-update" then
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName)
         return
     end
 

@@ -158,4 +158,89 @@ function PetCubeService.spawnPlayerTeamCubes(player, team)
     end
 end
 
+function PetCubeService.spawnPlayerTeamDuelLine(player, team, enemyPosition)
+    -- Propósito: Mostrar 5 cubos del equipo en línea frente al domador mirando al contrincante.
+    -- Precondiciones:
+    --   1. player debe ser instancia Player válida.
+    --   2. team debe ser tabla de mascotas.
+    --   3. enemyPosition debe ser Vector3 válida.
+    -- Ubicación: ServerScriptService/Combat/PetCubeService
+    -- Retorna: nil
+    if type(team) ~= "table" or typeof(enemyPosition) ~= "Vector3" then
+        return
+    end
+
+    PetCubeService.ensureElementTemplates()
+    PetCubeService.clearPlayerCubes(player)
+
+    local character = player.Character
+    if not character then
+        return
+    end
+
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp or not hrp:IsA("BasePart") then
+        return
+    end
+
+    local lookDir = enemyPosition - hrp.Position
+    lookDir = Vector3.new(lookDir.X, 0, lookDir.Z)
+    if lookDir.Magnitude < 1e-4 then
+        lookDir = Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z)
+    end
+    if lookDir.Magnitude < 1e-4 then
+        lookDir = Vector3.new(0, 0, -1)
+    end
+    local forward = lookDir.Unit
+
+    local right = forward:Cross(Vector3.new(0, 1, 0))
+    if right.Magnitude < 1e-4 then
+        right = Vector3.new(1, 0, 0)
+    else
+        right = right.Unit
+    end
+
+    local templateFolder = getTemplateFolder()
+    local worldFolder = getWorldFolder()
+    local playerFolder = Instance.new("Folder")
+    playerFolder.Name = player.Name
+    playerFolder.Parent = worldFolder
+
+    local lineCount = math.max(1, #team)
+    local centerIndex = (lineCount + 1) * 0.5
+    local frontDistance = 6
+    local sideSpacing = 3
+
+    for index, pet in ipairs(team) do
+        local monsterData = MonstersData[pet.MonsterId]
+        if monsterData then
+            local element = monsterData.Element
+            local template = templateFolder:FindFirstChild("Cube_" .. tostring(element))
+            if template and template:IsA("Part") then
+                local sideOffset = (index - centerIndex) * sideSpacing
+                local offset = (forward * frontDistance) + (right * sideOffset) + Vector3.new(0, 2.5, 0)
+
+                local cube = template:Clone()
+                cube.Name = "PetCube_" .. tostring(index)
+                cube.Anchored = false
+                cube.Massless = true
+                cube.CanCollide = false
+                cube.CanQuery = false
+                cube.CanTouch = false
+
+                local worldPos = hrp.Position + offset
+                cube.CFrame = CFrame.lookAt(worldPos, worldPos + forward, Vector3.new(0, 1, 0))
+
+                local weld = Instance.new("WeldConstraint")
+                weld.Name = "FollowWeld"
+                weld.Part0 = cube
+                weld.Part1 = hrp
+                weld.Parent = cube
+
+                cube.Parent = playerFolder
+            end
+        end
+    end
+end
+
 return PetCubeService

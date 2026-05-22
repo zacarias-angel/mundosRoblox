@@ -25,6 +25,7 @@ local CombatFolder = ServerScriptService:WaitForChild("Combat")
 local TeamManager = require(CombatFolder:WaitForChild("TeamManager"))
 local MonsterCombat = require(CombatFolder:WaitForChild("MonsterCombat"))
 local PetCubeService = require(CombatFolder:WaitForChild("PetCubeService"))
+local PvpStarsService = require(CombatFolder:WaitForChild("PvpStarsService"))
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local CombatSubmit = RemoteEvents:WaitForChild("CombatSubmit")
@@ -56,6 +57,7 @@ local ELEMENTS_LIST = { "Fuego", "Agua", "Planta", "Electricidad" }
 local MONSTER_CHALLENGE_DISTANCE = 15
 local MONSTER_AI_ATTACK_INTERVAL = 4
 local MONSTER_TEAM_SIZE = 5
+local DUEL_PLAYER_DISTANCE = 28
 
 local function dbg(message)
     -- Propósito: Emitir logs de depuración del servidor de combate.
@@ -134,6 +136,130 @@ local function getDuelOpponent(player)
     return nil, nil
 end
 
+local function setupDuelParticipants(duel)
+    -- Propósito: Posicionar ambos domadores anclados, enfrentados y en distancia fija para el duelo PvP.
+    -- Precondiciones:
+    --   1. duel debe tener playerA y playerB válidos.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if not duel or not duel.playerA or not duel.playerB then
+        return
+    end
+
+    local charA = duel.playerA.Character
+    local charB = duel.playerB.Character
+    if not charA or not charB then
+        return
+    end
+
+    local hrpA = charA:FindFirstChild("HumanoidRootPart")
+    local hrpB = charB:FindFirstChild("HumanoidRootPart")
+    local humA = charA:FindFirstChildOfClass("Humanoid")
+    local humB = charB:FindFirstChildOfClass("Humanoid")
+    if not hrpA or not hrpB or not hrpA:IsA("BasePart") or not hrpB:IsA("BasePart") then
+        return
+    end
+
+    duel.anchorStateByUserId = duel.anchorStateByUserId or {}
+    duel.anchorStateByUserId[duel.playerA.UserId] = {
+        wasAnchored = hrpA.Anchored,
+        walkSpeed = humA and humA.WalkSpeed or nil,
+        jumpPower = humA and humA.JumpPower or nil,
+        autoRotate = humA and humA.AutoRotate or nil,
+    }
+    duel.anchorStateByUserId[duel.playerB.UserId] = {
+        wasAnchored = hrpB.Anchored,
+        walkSpeed = humB and humB.WalkSpeed or nil,
+        jumpPower = humB and humB.JumpPower or nil,
+        autoRotate = humB and humB.AutoRotate or nil,
+    }
+
+    local center = (hrpA.Position + hrpB.Position) * 0.5
+    local dir = hrpB.Position - hrpA.Position
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude < 1e-4 then
+        dir = Vector3.new(hrpA.CFrame.LookVector.X, 0, hrpA.CFrame.LookVector.Z)
+    end
+    if dir.Magnitude < 1e-4 then
+        dir = Vector3.new(0, 0, -1)
+    end
+    local forward = dir.Unit
+
+    local posA = center - (forward * (DUEL_PLAYER_DISTANCE * 0.5))
+    local posB = center + (forward * (DUEL_PLAYER_DISTANCE * 0.5))
+    posA = Vector3.new(posA.X, hrpA.Position.Y, posA.Z)
+    posB = Vector3.new(posB.X, hrpB.Position.Y, posB.Z)
+
+    hrpA.Anchored = true
+    hrpB.Anchored = true
+    hrpA.AssemblyLinearVelocity = Vector3.zero
+    hrpB.AssemblyLinearVelocity = Vector3.zero
+    hrpA.AssemblyAngularVelocity = Vector3.zero
+    hrpB.AssemblyAngularVelocity = Vector3.zero
+    hrpA.CFrame = CFrame.lookAt(posA, posB, Vector3.new(0, 1, 0))
+    hrpB.CFrame = CFrame.lookAt(posB, posA, Vector3.new(0, 1, 0))
+
+    if humA then
+        humA.AutoRotate = false
+        humA.WalkSpeed = 0
+        humA.JumpPower = 0
+    end
+
+    if humB then
+        humB.AutoRotate = false
+        humB.WalkSpeed = 0
+        humB.JumpPower = 0
+    end
+
+    local stateA = playerStates[duel.playerA]
+    local stateB = playerStates[duel.playerB]
+    local teamA = stateA and stateA.team or TeamManager.getOrCreateTeam(duel.playerA)
+    local teamB = stateB and stateB.team or TeamManager.getOrCreateTeam(duel.playerB)
+
+    PetCubeService.spawnPlayerTeamDuelLine(duel.playerA, teamA, hrpB.Position)
+    PetCubeService.spawnPlayerTeamDuelLine(duel.playerB, teamB, hrpA.Position)
+end
+
+local function restoreDuelParticipants(duel)
+    -- Propósito: Restaurar movilidad y estado original de ambos domadores al terminar duelo PvP.
+    -- Precondiciones:
+    --   1. duel puede contener estados previos de anclaje.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if not duel then
+        return
+    end
+
+    local participants = { duel.playerA, duel.playerB }
+    for _, participant in ipairs(participants) do
+        if participant and participant.Character then
+            local hrp = participant.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = participant.Character:FindFirstChildOfClass("Humanoid")
+            local previousState = duel.anchorStateByUserId and duel.anchorStateByUserId[participant.UserId]
+
+            if hrp and hrp:IsA("BasePart") then
+                hrp.Anchored = previousState and previousState.wasAnchored or false
+            end
+
+            if humanoid and previousState then
+                if type(previousState.walkSpeed) == "number" then
+                    humanoid.WalkSpeed = previousState.walkSpeed
+                end
+                if type(previousState.jumpPower) == "number" then
+                    humanoid.JumpPower = previousState.jumpPower
+                end
+                if type(previousState.autoRotate) == "boolean" then
+                    humanoid.AutoRotate = previousState.autoRotate
+                end
+            end
+
+            local participantState = playerStates[participant]
+            local team = participantState and participantState.team or TeamManager.getOrCreateTeam(participant)
+            PetCubeService.spawnPlayerTeamCubes(participant, team)
+        end
+    end
+end
+
 local function endDuel(duel, winner, reason)
     -- Propósito: Finalizar un duelo activo y notificar resultado a ambos jugadores.
     -- Precondiciones:
@@ -151,6 +277,8 @@ local function endDuel(duel, winner, reason)
         loser = duel.playerA
     end
 
+    restoreDuelParticipants(duel)
+
     for _, participant in ipairs({ duel.playerA, duel.playerB }) do
         activeDuels[participant] = nil
         local state = playerStates[participant]
@@ -164,15 +292,36 @@ local function endDuel(duel, winner, reason)
     sendDuelState(duel.playerA, {
         type = "duel-ended",
         winnerUserId = winner and winner.UserId or nil,
+        opponentUserId = duel.playerB and duel.playerB.UserId or nil,
         reason = reason or "duel-ended",
     })
     sendDuelState(duel.playerB, {
         type = "duel-ended",
         winnerUserId = winner and winner.UserId or nil,
+        opponentUserId = duel.playerA and duel.playerA.UserId or nil,
         reason = reason or "duel-ended",
     })
 
     if winner and loser then
+        if reason == "hp-depleted" then
+            local winnerStars, loserStars = PvpStarsService.applyPvpDuelResult(winner, loser)
+            dbg(
+                "duelo finalizado: "
+                .. winner.Name
+                .. " venció a "
+                .. loser.Name
+                .. " | estrellas => "
+                .. winner.Name
+                .. ":"
+                .. tostring(winnerStars)
+                .. " / "
+                .. loser.Name
+                .. ":"
+                .. tostring(loserStars)
+            )
+            return
+        end
+
         dbg("duelo finalizado: " .. winner.Name .. " venció a " .. loser.Name)
     end
 end
@@ -187,6 +336,8 @@ local function startDuelCountdown(duel)
         return
     end
 
+    setupDuelParticipants(duel)
+
     for seconds = COUNTDOWN_SECONDS, 1, -1 do
         if activeDuels[duel.playerA] ~= duel or activeDuels[duel.playerB] ~= duel then
             return
@@ -196,6 +347,7 @@ local function startDuelCountdown(duel)
             type = "countdown",
             value = seconds,
             opponentName = duel.playerB.Name,
+            opponentUserId = duel.playerB.UserId,
             selfHP = duel.hpByUserId[duel.playerA.UserId],
             enemyHP = duel.hpByUserId[duel.playerB.UserId],
         })
@@ -204,6 +356,7 @@ local function startDuelCountdown(duel)
             type = "countdown",
             value = seconds,
             opponentName = duel.playerA.Name,
+            opponentUserId = duel.playerA.UserId,
             selfHP = duel.hpByUserId[duel.playerB.UserId],
             enemyHP = duel.hpByUserId[duel.playerA.UserId],
         })
@@ -224,6 +377,7 @@ local function startDuelCountdown(duel)
     sendDuelState(duel.playerA, {
         type = "duel-started",
         opponentName = duel.playerB.Name,
+        opponentUserId = duel.playerB.UserId,
         selfHP = duel.hpByUserId[duel.playerA.UserId],
         enemyHP = duel.hpByUserId[duel.playerB.UserId],
     })
@@ -231,6 +385,7 @@ local function startDuelCountdown(duel)
     sendDuelState(duel.playerB, {
         type = "duel-started",
         opponentName = duel.playerA.Name,
+        opponentUserId = duel.playerA.UserId,
         selfHP = duel.hpByUserId[duel.playerB.UserId],
         enemyHP = duel.hpByUserId[duel.playerA.UserId],
     })
@@ -1054,6 +1209,7 @@ local function onCombatSubmit(player, payload)
                 sendDuelState(opponent, {
                     type = "duel-update",
                     opponentName = player.Name,
+                    opponentUserId = player.UserId,
                     selfHP = duel.hpByUserId[opponent.UserId],
                     enemyHP = duel.hpByUserId[player.UserId],
                     lastDamageReceived = combatDamage.totalDamage,
@@ -1062,6 +1218,7 @@ local function onCombatSubmit(player, payload)
                 sendDuelState(player, {
                     type = "duel-update",
                     opponentName = opponent.Name,
+                    opponentUserId = opponent.UserId,
                     selfHP = duel.hpByUserId[player.UserId],
                     enemyHP = duel.hpByUserId[opponent.UserId],
                     lastDamageDealt = combatDamage.totalDamage,
@@ -1117,11 +1274,13 @@ local function onCombatSubmit(player, payload)
 end
 
 Players.PlayerAdded:Connect(function(player)
+    PvpStarsService.onPlayerAdded(player)
     initPlayerState(player)
     bindCharacterSpawn(player)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
+    PvpStarsService.onPlayerRemoving(player)
     cleanPlayerState(player)
 end)
 
@@ -1130,6 +1289,7 @@ CombatChallengeRequest.OnServerEvent:Connect(onCombatChallengeRequest)
 CombatChallengeResponse.OnServerEvent:Connect(onCombatChallengeResponse)
 
 for _, player in ipairs(Players:GetPlayers()) do
+    PvpStarsService.onPlayerAdded(player)
     if not playerStates[player] then
         initPlayerState(player)
     end

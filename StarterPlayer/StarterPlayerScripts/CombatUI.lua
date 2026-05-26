@@ -1845,6 +1845,18 @@ local function connectCellInput()
                 startTurn(c, r)
             end)
 
+            btn.InputBegan:Connect(function(input)
+                if input.UserInputType ~= Enum.UserInputType.Touch then
+                    return
+                end
+                if not localGrid then
+                    return
+                end
+                dragStartPos = input.Position
+                dbg("TouchStart en fila " .. r .. " col " .. c)
+                startTurn(c, r)
+            end)
+
             btn.MouseEnter:Connect(function()
                 -- Propósito: Aplicar swap al entrar a una celda durante drag de mouse.
                 -- Precondiciones:
@@ -1878,13 +1890,6 @@ local function connectCellInput()
                 end
             end)
 
-            btn.TouchTap:Connect(function()
-                if not localGrid then
-                    return
-                end
-                dbg("TouchTap en fila " .. r .. " col " .. c)
-                startTurn(c, r)
-            end)
         end
     end
 
@@ -1897,20 +1902,18 @@ local function connectCellInput()
         showGhost(dragCurrentCell.col, dragCurrentCell.row, mousePos)
     end)
 
-    UserInputService.InputBegan:Connect(function(input, _gameProcessed)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            isPrimaryMouseDown = true
-        end
-    end)
-
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and (isPrimaryMouseDown or isDragging) then
             isPrimaryMouseDown = false
             ghostFrame.Visible = false
-            dbg("MouseButton1Up")
             if isDragging then
+                dbg("MouseButton1Up")
                 submitTurn()
             end
+        end
+
+        if input.UserInputType == Enum.UserInputType.Touch and isDragging then
+            submitTurn()
         end
     end)
 
@@ -1982,11 +1985,7 @@ local function connectCellInput()
         end
     end)
 
-    UserInputService.TouchEnded:Connect(function(_touch, gameProcessed)
-        if gameProcessed then
-            return
-        end
-
+    UserInputService.TouchEnded:Connect(function(_touch, _gameProcessed)
         if isDragging then
             submitTurn()
         end

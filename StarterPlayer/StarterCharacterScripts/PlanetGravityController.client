@@ -240,6 +240,7 @@ local character = script.Parent
 local humanoid = character:WaitForChild("Humanoid")
 local hrp = character:WaitForChild("HumanoidRootPart")
 local camera = workspace.CurrentCamera
+local controlsInterface = nil
 
 local GRAVITY_ACCEL = 120
 local MOVE_SPEED = 34
@@ -275,9 +276,11 @@ local CAMERA_HEIGHT = 6
 local CAMERA_LOOK_OFFSET = 2
 local CAMERA_SMOOTH = 12
 local CAMERA_MOUSE_SENSITIVITY = 0.0032
+local CAMERA_TOUCH_SENSITIVITY = 0.0042
 local CAMERA_PITCH_MIN = math.rad(-55)
 local CAMERA_PITCH_MAX = math.rad(60)
 local FACING_RESPONSE = 12
+local MOBILE_MOVE_GRACE_TIME = 0.14
 
 -- Assets recomendados:
 -- Crear carpeta si no existe:
@@ -295,6 +298,7 @@ local DEBUG_LOGS = true
 local DEBUG_INTERVAL = 0.4
 local STUCK_SPEED_THRESHOLD = 1.2
 local STUCK_TIME_THRESHOLD = 0.7
+local CONTROLS_INIT_RETRY_INTERVAL = 1.0
 
 local inputState = {
 	W = false,
@@ -312,6 +316,10 @@ local desiredRadiusFromCenter = nil
 local cameraYawDelta = 0
 local cameraPitch = math.rad(8)
 local isRightMouseDown = false
+local activeLookTouchInput = nil
+local lastLookTouchPos = nil
+local lastMobileTangentMove = Vector3.zero
+local lastMobileMoveTime = -100
 local jumpRequested = false
 local lastJumpTime = -100
 local lastUpVector = Vector3.new(0, 1, 0)
@@ -321,6 +329,7 @@ local hasSnappedToSurface = false
 local isFlyMode = false
 local flyUp = false
 local flyDown = false
+local controlsInitRetryAcc = CONTROLS_INIT_RETRY_INTERVAL
 
 local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator")
 animator.Parent = humanoid
@@ -424,6 +433,153 @@ local function getLocalMoveVector()
 end
 
 --[[
+Funcion: getControlsMoveVector
+
+Proposito:
+Obtiene el vector de movimiento local (X/Z) desde PlayerModule Controls,
+que es mas estable en movil que depender de Humanoid.MoveDirection.
+
+Precondiciones:
+- controlsInterface puede ser nil si PlayerModule no esta disponible.
+
+Devuelve:
+- Vector3 local o nil.
+]]
+local function getControlsMoveVector()
+	if not controlsInterface or type(controlsInterface.GetMoveVector) ~= "function" then
+		return nil
+	end
+
+	local ok, moveVector = pcall(function()
+		return controlsInterface:GetMoveVector()
+	end)
+
+	if not ok or typeof(moveVector) ~= "Vector3" then
+		return nil
+	end
+
+	local localMove = Vector3.new(moveVector.X, 0, moveVector.Z)
+	if localMove.Magnitude > 1 then
+		localMove = localMove.Unit
+	end
+
+	if localMove.Magnitude < 1e-3 then
+		return nil
+	end
+
+	return localMove
+end
+
+--[[
+Funcion: getCombinedMoveVector
+
+Proposito:
+Combina teclado WASD con el vector local de PlayerModule Controls en movil.
+Si Controls no esta disponible, usa Humanoid.MoveDirection como fallback.
+Cuando hay teclado activo, tiene prioridad para no afectar desktop.
+
+Precondiciones:
+- cameraRight, cameraForward y upVector deben ser Vector3 validos.
+
+Requiere:
+- PlanetGravityMath.projectOnTangent.
+
+Devuelve:
+- Vector3 local x/z normalizado.
+]]
+local function getCombinedMoveVector(cameraRight, cameraForward, upVector)
+	local keyboardMove = getLocalMoveVector()
+	if keyboardMove.Magnitude > 0.01 then
+		lastMobileTangentMove = Vector3.zero
+		lastMobileMoveTime = -100
+		return keyboardMove
+	end
+
+	local controlsMove = getControlsMoveVector()
+	if controlsMove and controlsMove.Magnitude > 1e-3 then
+		local tangentFromControls = (cameraRight * controlsMove.X) + (cameraForward * -controlsMove.Z)
+		tangentFromControls = PlanetGravityMath.projectOnTangent(tangentFromControls, upVector)
+		if tangentFromControls and tangentFromControls.Magnitude >= 1e-3 then
+			lastMobileTangentMove = tangentFromControls
+			lastMobileMoveTime = os.clock()
+		end
+		return controlsMove
+	end
+
+	local moveDirection = humanoid.MoveDirection
+	local tangentMove = nil
+	if moveDirection.Magnitude >= 1e-3 then
+		tangentMove = PlanetGravityMath.projectOnTangent(moveDirection, upVector)
+		if tangentMove and tangentMove.Magnitude >= 1e-3 then
+			lastMobileTangentMove = tangentMove
+			lastMobileMoveTime = os.clock()
+		end
+	end
+
+	if not tangentMove or tangentMove.Magnitude < 1e-3 then
+		if (os.clock() - lastMobileMoveTime) <= MOBILE_MOVE_GRACE_TIME and lastMobileTangentMove.Magnitude >= 1e-3 then
+			tangentMove = lastMobileTangentMove
+		else
+			return Vector3.zero
+		end
+	end
+
+	if tangentMove.Magnitude < 1e-3 then
+		return Vector3.zero
+	end
+
+	local localX = tangentMove:Dot(cameraRight)
+	local localZ = -tangentMove:Dot(cameraForward)
+	local combined = Vector3.new(localX, 0, localZ)
+	if combined.Magnitude > 1 then
+		combined = combined.Unit
+	end
+
+	return combined
+end
+
+--[[
+Funcion: tryInitializeControlsInterface
+
+Proposito:
+Inicializa (o reintenta inicializar) PlayerModule:GetControls para leer
+input movil de forma estable en gravedad planetaria.
+
+Devuelve:
+- boolean indicando si controlsInterface quedo disponible.
+]]
+local function tryInitializeControlsInterface()
+	if controlsInterface then
+		return true
+	end
+
+	local playerScripts = player:FindFirstChild("PlayerScripts")
+	if not playerScripts then
+		return false
+	end
+
+	local playerModuleScript = playerScripts:FindFirstChild("PlayerModule")
+	if not playerModuleScript or not playerModuleScript:IsA("ModuleScript") then
+		return false
+	end
+
+	local okModule, playerModule = pcall(require, playerModuleScript)
+	if not okModule or type(playerModule) ~= "table" or type(playerModule.GetControls) ~= "function" then
+		return false
+	end
+
+	local okControls, controls = pcall(function()
+		return playerModule:GetControls()
+	end)
+	if not okControls or not controls then
+		return false
+	end
+
+	controlsInterface = controls
+	return true
+end
+
+--[[
 Funcion: getProjectedUnit
 
 Proposito:
@@ -441,10 +597,9 @@ Devuelve:
 local function getProjectedUnit(vector, upVector)
 	local projected = PlanetGravityMath.projectOnTangent(vector, upVector)
 	if not projected or projected.Magnitude < 1e-5 then
-		warn("PlanetGravityController: Proyección tangencial inválida, usando fallback")
-		projected = Vector3.zero
+		return nil
 	end
-	return projected
+	return projected.Unit
 end
 
 --[[
@@ -663,11 +818,11 @@ Requiere:
 Devuelve:
 - nil
 ]]
-local function playLocomotionAnimation(tangentSpeed, isGrounded, radialSpeed)
+local function playLocomotionAnimation(tangentSpeed, isGrounded, radialSpeed, moveInputMagnitude)
 	local targetName = "Idle"
 	if not isGrounded and radialSpeed > 2 then
 		targetName = "Jump"
-	elseif isGrounded and tangentSpeed > 1.5 and getLocalMoveVector().Magnitude > 0.1 then
+	elseif isGrounded and tangentSpeed > 1.5 and (moveInputMagnitude or 0) > 0.1 then
 		targetName = "Walk"
 	end
 
@@ -716,6 +871,31 @@ local function clearMovementInput()
 	inputState.D = false
 	flyUp = false
 	flyDown = false
+end
+
+--[[
+Funcion: shouldUseTouchForCamera
+
+Proposito:
+Restringir el control de camara tactil al lado derecho para no interferir
+con el joystick virtual de movimiento en movil.
+
+Precondiciones:
+- touchInput debe ser InputObject de tipo Touch.
+
+Requiere:
+- camera disponible.
+
+Devuelve:
+- boolean.
+]]
+local function shouldUseTouchForCamera(touchInput)
+	if touchInput.UserInputType ~= Enum.UserInputType.Touch then
+		return false
+	end
+
+	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+	return touchInput.Position.X >= (viewport.X * 0.45)
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -784,6 +964,55 @@ UserInputService.InputChanged:Connect(function(input, gameProcessed)
 			CAMERA_PITCH_MIN,
 			CAMERA_PITCH_MAX
 		)
+		return
+	end
+
+end)
+
+UserInputService.TouchStarted:Connect(function(touchInput, gameProcessed)
+	if gameProcessed then
+		return
+	end
+
+	if activeLookTouchInput then
+		return
+	end
+
+	if shouldUseTouchForCamera(touchInput) then
+		activeLookTouchInput = touchInput
+		lastLookTouchPos = touchInput.Position
+	end
+end)
+
+UserInputService.TouchMoved:Connect(function(touchInput, gameProcessed)
+	if gameProcessed then
+		return
+	end
+
+	if touchInput ~= activeLookTouchInput then
+		return
+	end
+
+	if not lastLookTouchPos then
+		lastLookTouchPos = touchInput.Position
+		return
+	end
+
+	local delta = touchInput.Position - lastLookTouchPos
+	lastLookTouchPos = touchInput.Position
+
+	cameraYawDelta -= delta.X * CAMERA_TOUCH_SENSITIVITY
+	cameraPitch = math.clamp(
+		cameraPitch - (delta.Y * CAMERA_TOUCH_SENSITIVITY),
+		CAMERA_PITCH_MIN,
+		CAMERA_PITCH_MAX
+	)
+end)
+
+UserInputService.TouchEnded:Connect(function(touchInput, _gameProcessed)
+	if touchInput == activeLookTouchInput then
+		activeLookTouchInput = nil
+		lastLookTouchPos = nil
 	end
 end)
 
@@ -828,8 +1057,19 @@ end
 
 disableHumanoidLocomotion()
 tryResolveActivePlanet()
+if UserInputService.TouchEnabled and not tryInitializeControlsInterface() then
+	warn("PlanetGravityController: Controls movil no listo al iniciar, reintentando en background")
+end
 
 RunService.RenderStepped:Connect(function(dt)
+	if UserInputService.TouchEnabled and not controlsInterface then
+		controlsInitRetryAcc += dt
+		if controlsInitRetryAcc >= CONTROLS_INIT_RETRY_INTERVAL then
+			controlsInitRetryAcc = 0
+			tryInitializeControlsInterface()
+		end
+	end
+
 	planetScanAcc += dt
 	if planetScanAcc >= PLANET_SCAN_INTERVAL then
 		planetScanAcc = 0
@@ -865,7 +1105,7 @@ RunService.RenderStepped:Connect(function(dt)
 
 		hrp.AssemblyLinearVelocity = flyDir * flySpeed
 		hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + cameraForward, upVector)
-		playLocomotionAnimation(0, false, 0)
+		playLocomotionAnimation(0, false, 0, 0)
 		return
 	end
 
@@ -909,25 +1149,32 @@ RunService.RenderStepped:Connect(function(dt)
 
 	updateOrbitCamera(upVector, dt)
 
-	local cameraRight = cameraPlanarForward:Cross(upVector)
-	if cameraRight.Magnitude < 1e-5 then
-		cameraRight = getProjectedUnit(hrp.CFrame.RightVector, upVector)
-	else
-		cameraRight = cameraRight.Unit
+	local moveCameraForward = getProjectedUnit(camera.CFrame.LookVector, upVector)
+	if not moveCameraForward then
+		moveCameraForward = cameraPlanarForward
 	end
-	if not cameraRight then
+	if not moveCameraForward then
+		moveCameraForward = surfaceForward
+	end
+	if not moveCameraForward then
 		return
 	end
 
-	-- Fuerza consistencia con el eje right real de la camara para evitar inversion A/D.
-	local observedCameraRight = getProjectedUnit(camera.CFrame.RightVector, upVector)
-	if observedCameraRight and cameraRight:Dot(observedCameraRight) < 0 then
-		cameraRight = -cameraRight
+	local moveCameraRight = getProjectedUnit(camera.CFrame.RightVector, upVector)
+	if not moveCameraRight then
+		moveCameraRight = moveCameraForward:Cross(upVector)
+		if moveCameraRight.Magnitude >= 1e-5 then
+			moveCameraRight = moveCameraRight.Unit
+		else
+			moveCameraRight = nil
+		end
 	end
-	cameraPlanarForward = upVector:Cross(cameraRight).Unit
+	if not moveCameraRight then
+		return
+	end
 
-	local localMove = getLocalMoveVector()
-	local desiredMove = (cameraRight * localMove.X) + (cameraPlanarForward * -localMove.Z)
+	local localMove = getCombinedMoveVector(moveCameraRight, moveCameraForward, upVector)
+	local desiredMove = (moveCameraRight * localMove.X) + (moveCameraForward * -localMove.Z)
 	local groundHit = getGroundHit(gravityDir)
 	local centerDistance = (hrp.Position - gravityCenter.Position).Magnitude
 	if groundHit and desiredRadiusFromCenter then
@@ -967,7 +1214,7 @@ RunService.RenderStepped:Connect(function(dt)
 	hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + surfaceForward, upVector)
 
 	-- Movimiento tangencial con velocidad objetivo para evitar acumulacion inestable.
-	desiredMove = (cameraRight * localMove.X) + (cameraPlanarForward * -localMove.Z)
+	desiredMove = (moveCameraRight * localMove.X) + (moveCameraForward * -localMove.Z)
 
 	local currentVel = hrp.AssemblyLinearVelocity
 	local radialSpeed = currentVel:Dot(upVector)
@@ -1030,7 +1277,7 @@ RunService.RenderStepped:Connect(function(dt)
 			hrp.CFrame = CFrame.lookAt(lockedPosition, lockedPosition + surfaceForward, upVector)
 			hrp.AssemblyLinearVelocity = Vector3.zero
 			hrp.AssemblyAngularVelocity = Vector3.zero
-			playLocomotionAnimation(0, true, 0)
+			playLocomotionAnimation(0, true, 0, 0)
 			updateOrbitCamera(upVector, dt)
 			return
 		end
@@ -1046,6 +1293,14 @@ RunService.RenderStepped:Connect(function(dt)
 		stuckTimeAcc += dt
 	else
 		stuckTimeAcc = 0
+	end
+
+	if stuckTimeAcc >= STUCK_TIME_THRESHOLD and desiredMove.Magnitude > 0 then
+		local rescueSpeed = math.clamp(MOVE_SPEED * 0.72, STUCK_SPEED_THRESHOLD + 0.5, MAX_TANGENT_SPEED)
+		newTangent = desiredMove.Unit * rescueSpeed
+		newVel = (upVector * newRadialSpeed) + newTangent
+		hrp.AssemblyLinearVelocity = newVel
+		tangentSpeed = newTangent.Magnitude
 	end
 
 	local hrpInsideDepth = 0
@@ -1093,7 +1348,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	playLocomotionAnimation(tangentSpeed, isGrounded, newRadialSpeed)
+	playLocomotionAnimation(tangentSpeed, isGrounded, newRadialSpeed, localMove.Magnitude)
 
 	-- Camara fija en tercera persona alineada al personaje y al up local del planeta.
 	updateOrbitCamera(upVector, dt)

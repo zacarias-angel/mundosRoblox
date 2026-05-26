@@ -43,6 +43,11 @@ local CHALLENGE_DISTANCE = 10
 local COMBAT_DEBUG = true
 local IS_TOUCH_DEVICE = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local MAX_DUEL_HP = 15000
+local DUEL_INTRO_CARD_WIDTH = 320
+local DUEL_INTRO_CARD_HEIGHT = 160
+local DUEL_INTRO_SLIDE_TIME = 0.32
+local DUEL_INTRO_IMPACT_TIME = 0.08
+local DUEL_INTRO_HOLD_TIME = 0.5
 
 local ELEMENT_COLORS = {
     Fuego = Color3.fromRGB(220, 60, 40),
@@ -84,8 +89,14 @@ local duelActive = false
 local duelStarted = false
 local duelSelfHP = 0
 local duelEnemyHP = 0
+local duelSelfStars = 0
+local duelEnemyStars = 0
 local duelOpponentName = "Sin oponente"
 local duelOpponentUserId = nil
+local duelOpponentKind = "player"
+local duelIntroToken = 0
+local duelIntroInProgress = false
+local monsterPromptRestoreToken = 0
 local pendingChallengerUserId = nil
 local challengePromptRefs = {}
 
@@ -307,6 +318,160 @@ countdownLabel.Text = ""
 countdownLabel.Visible = false
 countdownLabel.Parent = screenGui
 
+local duelIntroOverlay = Instance.new("Frame")
+duelIntroOverlay.Name = "DuelIntroOverlay"
+duelIntroOverlay.Size = UDim2.fromScale(1, 1)
+duelIntroOverlay.Position = UDim2.fromScale(0, 0)
+duelIntroOverlay.BackgroundColor3 = Color3.fromRGB(5, 8, 16)
+duelIntroOverlay.BackgroundTransparency = 0.45
+duelIntroOverlay.BorderSizePixel = 0
+duelIntroOverlay.Visible = false
+duelIntroOverlay.ZIndex = 40
+duelIntroOverlay.Parent = screenGui
+
+local duelIntroLeftCard = Instance.new("Frame")
+duelIntroLeftCard.Name = "LeftCard"
+duelIntroLeftCard.AnchorPoint = Vector2.new(0, 0.5)
+duelIntroLeftCard.Position = UDim2.new(0, -DUEL_INTRO_CARD_WIDTH, 0.5, 0)
+duelIntroLeftCard.Size = UDim2.new(0, DUEL_INTRO_CARD_WIDTH, 0, DUEL_INTRO_CARD_HEIGHT)
+duelIntroLeftCard.BackgroundColor3 = Color3.fromRGB(44, 76, 138)
+duelIntroLeftCard.BorderSizePixel = 0
+duelIntroLeftCard.ZIndex = 41
+duelIntroLeftCard.Parent = duelIntroOverlay
+Instance.new("UICorner", duelIntroLeftCard).CornerRadius = UDim.new(0, 14)
+
+local duelIntroLeftAvatar = Instance.new("ImageLabel")
+duelIntroLeftAvatar.Name = "Avatar"
+duelIntroLeftAvatar.Position = UDim2.new(0, 10, 0, 10)
+duelIntroLeftAvatar.Size = UDim2.new(0, 96, 0, 96)
+duelIntroLeftAvatar.BackgroundColor3 = Color3.fromRGB(10, 18, 34)
+duelIntroLeftAvatar.BorderSizePixel = 0
+duelIntroLeftAvatar.Image = ""
+duelIntroLeftAvatar.ZIndex = 42
+duelIntroLeftAvatar.Parent = duelIntroLeftCard
+Instance.new("UICorner", duelIntroLeftAvatar).CornerRadius = UDim.new(0, 10)
+
+local duelIntroLeftFallback = Instance.new("TextLabel")
+duelIntroLeftFallback.Name = "AvatarFallback"
+duelIntroLeftFallback.Size = UDim2.fromScale(1, 1)
+duelIntroLeftFallback.BackgroundTransparency = 1
+duelIntroLeftFallback.Font = Enum.Font.GothamBlack
+duelIntroLeftFallback.TextSize = 28
+duelIntroLeftFallback.TextColor3 = Color3.fromRGB(255, 255, 255)
+duelIntroLeftFallback.Text = "A"
+duelIntroLeftFallback.ZIndex = 43
+duelIntroLeftFallback.Parent = duelIntroLeftAvatar
+
+local duelIntroLeftName = Instance.new("TextLabel")
+duelIntroLeftName.Name = "Name"
+duelIntroLeftName.Position = UDim2.new(0, 118, 0, 24)
+duelIntroLeftName.Size = UDim2.new(1, -128, 0, 46)
+duelIntroLeftName.BackgroundTransparency = 1
+duelIntroLeftName.TextXAlignment = Enum.TextXAlignment.Left
+duelIntroLeftName.TextYAlignment = Enum.TextYAlignment.Center
+duelIntroLeftName.TextWrapped = true
+duelIntroLeftName.Font = Enum.Font.GothamBlack
+duelIntroLeftName.TextSize = 25
+duelIntroLeftName.TextColor3 = Color3.fromRGB(255, 255, 255)
+duelIntroLeftName.Text = "Domador A"
+duelIntroLeftName.ZIndex = 42
+duelIntroLeftName.Parent = duelIntroLeftCard
+
+local duelIntroLeftStars = Instance.new("TextLabel")
+duelIntroLeftStars.Name = "Stars"
+duelIntroLeftStars.Position = UDim2.new(0, 118, 0, 78)
+duelIntroLeftStars.Size = UDim2.new(1, -128, 0, 30)
+duelIntroLeftStars.BackgroundTransparency = 1
+duelIntroLeftStars.TextXAlignment = Enum.TextXAlignment.Left
+duelIntroLeftStars.Font = Enum.Font.GothamBold
+duelIntroLeftStars.TextSize = 18
+duelIntroLeftStars.TextColor3 = Color3.fromRGB(255, 227, 116)
+duelIntroLeftStars.Text = "Estrellas: 0"
+duelIntroLeftStars.ZIndex = 42
+duelIntroLeftStars.Parent = duelIntroLeftCard
+
+local duelIntroRightCard = Instance.new("Frame")
+duelIntroRightCard.Name = "RightCard"
+duelIntroRightCard.AnchorPoint = Vector2.new(1, 0.5)
+duelIntroRightCard.Position = UDim2.new(1, DUEL_INTRO_CARD_WIDTH, 0.5, 0)
+duelIntroRightCard.Size = UDim2.new(0, DUEL_INTRO_CARD_WIDTH, 0, DUEL_INTRO_CARD_HEIGHT)
+duelIntroRightCard.BackgroundColor3 = Color3.fromRGB(146, 52, 56)
+duelIntroRightCard.BorderSizePixel = 0
+duelIntroRightCard.ZIndex = 41
+duelIntroRightCard.Parent = duelIntroOverlay
+Instance.new("UICorner", duelIntroRightCard).CornerRadius = UDim.new(0, 14)
+
+local duelIntroRightAvatar = Instance.new("ImageLabel")
+duelIntroRightAvatar.Name = "Avatar"
+duelIntroRightAvatar.AnchorPoint = Vector2.new(1, 0)
+duelIntroRightAvatar.Position = UDim2.new(1, -10, 0, 10)
+duelIntroRightAvatar.Size = UDim2.new(0, 96, 0, 96)
+duelIntroRightAvatar.BackgroundColor3 = Color3.fromRGB(34, 10, 12)
+duelIntroRightAvatar.BorderSizePixel = 0
+duelIntroRightAvatar.Image = ""
+duelIntroRightAvatar.ZIndex = 42
+duelIntroRightAvatar.Parent = duelIntroRightCard
+Instance.new("UICorner", duelIntroRightAvatar).CornerRadius = UDim.new(0, 10)
+
+local duelIntroRightFallback = Instance.new("TextLabel")
+duelIntroRightFallback.Name = "AvatarFallback"
+duelIntroRightFallback.Size = UDim2.fromScale(1, 1)
+duelIntroRightFallback.BackgroundTransparency = 1
+duelIntroRightFallback.Font = Enum.Font.GothamBlack
+duelIntroRightFallback.TextSize = 28
+duelIntroRightFallback.TextColor3 = Color3.fromRGB(255, 255, 255)
+duelIntroRightFallback.Text = "B"
+duelIntroRightFallback.ZIndex = 43
+duelIntroRightFallback.Parent = duelIntroRightAvatar
+
+local duelIntroRightName = Instance.new("TextLabel")
+duelIntroRightName.Name = "Name"
+duelIntroRightName.Position = UDim2.new(0, 12, 0, 24)
+duelIntroRightName.Size = UDim2.new(1, -128, 0, 46)
+duelIntroRightName.BackgroundTransparency = 1
+duelIntroRightName.TextXAlignment = Enum.TextXAlignment.Left
+duelIntroRightName.TextYAlignment = Enum.TextYAlignment.Center
+duelIntroRightName.TextWrapped = true
+duelIntroRightName.Font = Enum.Font.GothamBlack
+duelIntroRightName.TextSize = 25
+duelIntroRightName.TextColor3 = Color3.fromRGB(255, 255, 255)
+duelIntroRightName.Text = "Domador B"
+duelIntroRightName.ZIndex = 42
+duelIntroRightName.Parent = duelIntroRightCard
+
+local duelIntroRightStars = Instance.new("TextLabel")
+duelIntroRightStars.Name = "Stars"
+duelIntroRightStars.Position = UDim2.new(0, 12, 0, 78)
+duelIntroRightStars.Size = UDim2.new(1, -128, 0, 30)
+duelIntroRightStars.BackgroundTransparency = 1
+duelIntroRightStars.TextXAlignment = Enum.TextXAlignment.Left
+duelIntroRightStars.Font = Enum.Font.GothamBold
+duelIntroRightStars.TextSize = 18
+duelIntroRightStars.TextColor3 = Color3.fromRGB(255, 227, 116)
+duelIntroRightStars.Text = "Estrellas: 0"
+duelIntroRightStars.ZIndex = 42
+duelIntroRightStars.Parent = duelIntroRightCard
+
+local duelIntroVsLabel = Instance.new("TextLabel")
+duelIntroVsLabel.Name = "VS"
+duelIntroVsLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+duelIntroVsLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+duelIntroVsLabel.Size = UDim2.new(0, 170, 0, 120)
+duelIntroVsLabel.BackgroundTransparency = 1
+duelIntroVsLabel.Font = Enum.Font.GothamBlack
+duelIntroVsLabel.TextSize = 88
+duelIntroVsLabel.TextColor3 = Color3.fromRGB(255, 242, 156)
+duelIntroVsLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+duelIntroVsLabel.TextStrokeTransparency = 0.1
+duelIntroVsLabel.Text = "VS"
+duelIntroVsLabel.Visible = false
+duelIntroVsLabel.ZIndex = 45
+duelIntroVsLabel.Parent = duelIntroOverlay
+
+local duelIntroVsScale = Instance.new("UIScale")
+duelIntroVsScale.Scale = 0.6
+duelIntroVsScale.Parent = duelIntroVsLabel
+
 local challengePrompt = Instance.new("Frame")
 challengePrompt.Name = "ChallengePrompt"
 challengePrompt.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -495,6 +660,70 @@ local function refreshGridVisibility()
     setGridInputEnabled(duelActive)
 end
 
+local function sanitizeStars(value)
+    -- Propósito: Normalizar un valor de estrellas para mostrar en UI.
+    -- Precondiciones:
+    --   1. value puede ser number o nil.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: number
+    local numeric = tonumber(value) or 0
+    return math.max(0, math.floor(numeric))
+end
+
+local function resolvePlayerStars(targetPlayer)
+    -- Propósito: Leer estrellas PvP de un jugador replicadas al cliente.
+    -- Precondiciones:
+    --   1. targetPlayer puede ser nil o Player válido.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: number
+    if not targetPlayer then
+        return 0
+    end
+
+    local attrStars = targetPlayer:GetAttribute("PvpStars")
+    if type(attrStars) == "number" then
+        return sanitizeStars(attrStars)
+    end
+
+    local leaderstats = targetPlayer:FindFirstChild("leaderstats")
+    local starsValue = leaderstats and leaderstats:FindFirstChild("PvpStars")
+    if starsValue and starsValue:IsA("IntValue") then
+        return sanitizeStars(starsValue.Value)
+    end
+
+    return 0
+end
+
+local function updateDuelMeta(data)
+    -- Propósito: Guardar metadata de duelo (tipo oponente y estrellas) para HUD/cinemática.
+    -- Precondiciones:
+    --   1. data debe ser tabla de estado parcial.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if type(data) ~= "table" then
+        return
+    end
+
+    if type(data.opponentKind) == "string" then
+        duelOpponentKind = data.opponentKind
+    elseif type(data.opponentUserId) == "number" then
+        duelOpponentKind = "player"
+    end
+
+    if type(data.selfStars) == "number" then
+        duelSelfStars = sanitizeStars(data.selfStars)
+    else
+        duelSelfStars = resolvePlayerStars(player)
+    end
+
+    if type(data.opponentStars) == "number" then
+        duelEnemyStars = sanitizeStars(data.opponentStars)
+    elseif duelOpponentKind == "player" and type(data.opponentUserId) == "number" then
+        local opponentPlayer = Players:GetPlayerByUserId(data.opponentUserId)
+        duelEnemyStars = resolvePlayerStars(opponentPlayer)
+    end
+end
+
 local function updateHPHud(selfHP, enemyHP, opponentName)
     -- Propósito: Actualizar barra de vida propia/rival en el HUD.
     -- Precondiciones:
@@ -517,8 +746,195 @@ local function updateHPHud(selfHP, enemyHP, opponentName)
     selfHPBarFill.Size = UDim2.new(selfRatio, 0, 1, 0)
     enemyHPBarFill.Size = UDim2.new(enemyRatio, 0, 1, 0)
 
-    selfHPLabel.Text = "Tu vida: " .. tostring(duelSelfHP)
-    enemyHPLabel.Text = "Rival " .. tostring(duelOpponentName) .. ": " .. tostring(duelEnemyHP)
+    selfHPLabel.Text = "Tu vida: " .. tostring(duelSelfHP) .. "  |  ⭐ " .. tostring(duelSelfStars)
+    enemyHPLabel.Text = "Rival " .. tostring(duelOpponentName) .. "  |  ⭐ " .. tostring(duelEnemyStars) .. ": " .. tostring(duelEnemyHP)
+end
+
+local function fillDuelIntroCard(avatarImage, avatarFallback, nameLabel, starsLabel, displayName, stars, userId, fallbackText)
+    -- Propósito: Cargar nombre, estrellas y avatar de una tarjeta de presentación de duelo.
+    -- Precondiciones:
+    --   1. avatarImage, avatarFallback, nameLabel, starsLabel deben existir.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    nameLabel.Text = tostring(displayName or "Domador")
+    starsLabel.Text = "Estrellas: " .. tostring(sanitizeStars(stars))
+
+    avatarImage.Image = ""
+    avatarFallback.Text = tostring(fallbackText or "?")
+    avatarFallback.Visible = true
+
+    return type(userId) == "number" and userId or nil
+end
+
+local function applyIntroAvatarAsync(avatarImage, avatarFallback, userId, token)
+    -- Propósito: Cargar avatar de tarjeta VS sin bloquear la animación.
+    -- Precondiciones:
+    --   1. userId debe ser number o nil.
+    --   2. token debe corresponder al intro activo.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if type(userId) ~= "number" then
+        return
+    end
+
+    task.spawn(function()
+        local ok, content = pcall(function()
+            return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size180x180)
+        end)
+
+        if token ~= duelIntroToken then
+            return
+        end
+
+        if ok and type(content) == "string" then
+            avatarImage.Image = content
+            avatarFallback.Visible = false
+        end
+    end)
+end
+
+local function setMonsterChallengePromptsEnabled(enabled)
+    -- Propósito: Alternar prompts de monstruos (MonsterChallengePrompt) visibles para este cliente.
+    -- Precondiciones:
+    --   1. enabled debe ser boolean.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    for _, descendant in ipairs(workspace:GetDescendants()) do
+        if descendant:IsA("ProximityPrompt") and descendant.Name == "MonsterChallengePrompt" then
+            descendant.Enabled = enabled
+        end
+    end
+end
+
+local function suppressMonsterChallengePrompts(seconds)
+    -- Propósito: Ocultar prompts de monstruos por unos segundos tras iniciar desafío.
+    -- Precondiciones:
+    --   1. seconds debe ser number > 0.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    local duration = tonumber(seconds) or 0
+    if duration <= 0 then
+        return
+    end
+
+    monsterPromptRestoreToken += 1
+    local restoreToken = monsterPromptRestoreToken
+    setMonsterChallengePromptsEnabled(false)
+
+    task.delay(duration, function()
+        if restoreToken ~= monsterPromptRestoreToken then
+            return
+        end
+        if duelActive then
+            return
+        end
+        setMonsterChallengePromptsEnabled(true)
+    end)
+end
+
+local function hideDuelIntro()
+    -- Propósito: Cerrar inmediatamente la cinemática VS si está visible.
+    -- Precondiciones: Ninguna.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    duelIntroToken += 1
+    duelIntroInProgress = false
+    duelIntroOverlay.Visible = false
+end
+
+local function playDuelIntro(data)
+    -- Propósito: Animar entrada de tarjetas de ambos combatientes con choque y texto VS.
+    -- Precondiciones:
+    --   1. data debe ser tabla con información del oponente.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if duelIntroInProgress then
+        return
+    end
+
+    duelIntroToken += 1
+    local token = duelIntroToken
+    duelIntroInProgress = true
+
+    duelIntroOverlay.BackgroundTransparency = 0.45
+    duelIntroOverlay.Visible = true
+    duelIntroVsLabel.Visible = false
+    duelIntroVsLabel.TextTransparency = 1
+    duelIntroVsScale.Scale = 0.6
+
+    duelIntroLeftCard.Position = UDim2.new(0, -DUEL_INTRO_CARD_WIDTH, 0.5, 0)
+    duelIntroRightCard.Position = UDim2.new(1, DUEL_INTRO_CARD_WIDTH, 0.5, 0)
+
+    local selfDisplayName = player.DisplayName
+    if selfDisplayName == nil or selfDisplayName == "" then
+        selfDisplayName = player.Name
+    end
+
+    local enemyDisplayName = duelOpponentName
+    local enemyUserId = type(data.opponentUserId) == "number" and data.opponentUserId or nil
+    local enemyFallback = "B"
+    if duelOpponentKind == "monster" then
+        enemyUserId = nil
+        enemyFallback = "M"
+    end
+
+    local selfAvatarUserId = fillDuelIntroCard(
+        duelIntroLeftAvatar,
+        duelIntroLeftFallback,
+        duelIntroLeftName,
+        duelIntroLeftStars,
+        selfDisplayName,
+        duelSelfStars,
+        player.UserId,
+        "A"
+    )
+    local enemyAvatarUserId = fillDuelIntroCard(
+        duelIntroRightAvatar,
+        duelIntroRightFallback,
+        duelIntroRightName,
+        duelIntroRightStars,
+        enemyDisplayName,
+        duelEnemyStars,
+        enemyUserId,
+        enemyFallback
+    )
+
+    applyIntroAvatarAsync(duelIntroLeftAvatar, duelIntroLeftFallback, selfAvatarUserId, token)
+    applyIntroAvatarAsync(duelIntroRightAvatar, duelIntroRightFallback, enemyAvatarUserId, token)
+
+    local leftImpactPosition = UDim2.new(0.5, -DUEL_INTRO_CARD_WIDTH + 16, 0.5, 0)
+    local rightImpactPosition = UDim2.new(0.5, DUEL_INTRO_CARD_WIDTH - 16, 0.5, 0)
+    local leftSettlePosition = UDim2.new(0.5, -DUEL_INTRO_CARD_WIDTH - 24, 0.5, 0)
+    local rightSettlePosition = UDim2.new(0.5, DUEL_INTRO_CARD_WIDTH + 24, 0.5, 0)
+
+    local slideInfo = TweenInfo.new(DUEL_INTRO_SLIDE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local leftSlide = TweenService:Create(duelIntroLeftCard, slideInfo, { Position = leftImpactPosition })
+    local rightSlide = TweenService:Create(duelIntroRightCard, slideInfo, { Position = rightImpactPosition })
+    leftSlide:Play()
+    rightSlide:Play()
+
+    task.wait(DUEL_INTRO_SLIDE_TIME - 0.04)
+    if token ~= duelIntroToken then
+        duelIntroInProgress = false
+        return
+    end
+
+    duelIntroVsLabel.Visible = true
+    local vsInfo = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    TweenService:Create(duelIntroVsScale, vsInfo, { Scale = 1 }):Play()
+    TweenService:Create(duelIntroVsLabel, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextTransparency = 0 }):Play()
+
+    local impactInfo = TweenInfo.new(DUEL_INTRO_IMPACT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(duelIntroLeftCard, impactInfo, { Position = leftSettlePosition }):Play()
+    TweenService:Create(duelIntroRightCard, impactInfo, { Position = rightSettlePosition }):Play()
+
+    task.wait(DUEL_INTRO_HOLD_TIME)
+    if token ~= duelIntroToken then
+        duelIntroInProgress = false
+        return
+    end
+
+    duelIntroInProgress = false
 end
 
 local function updateEnemyAvatar(userId, opponentName)
@@ -555,8 +971,11 @@ local function resetDuelHud()
     -- Retorna: nil
     duelSelfHP = MAX_DUEL_HP
     duelEnemyHP = MAX_DUEL_HP
+    duelSelfStars = resolvePlayerStars(player)
+    duelEnemyStars = 0
     duelOpponentName = "Sin oponente"
     duelOpponentUserId = nil
+    duelOpponentKind = "player"
     updateHPHud(duelSelfHP, duelEnemyHP, duelOpponentName)
     updateEnemyAvatar(nil, nil)
 end
@@ -1664,11 +2083,36 @@ CombatDuelState.OnClientEvent:Connect(function(data)
 
     if data.type == "challenge-sent" then
         duelStatusLabel.Text = "Desafio enviado a " .. tostring(data.targetName)
+        if data.opponentKind == "monster" then
+            suppressMonsterChallengePrompts(data.hideMonsterPromptSeconds or 4)
+        end
         task.delay(3, function()
             if duelStatusLabel.Text == "Desafio enviado a " .. tostring(data.targetName) then
                 duelStatusLabel.Text = ""
             end
         end)
+        return
+    end
+
+    if data.type == "duel-intro" then
+        duelActive = true
+        duelStarted = false
+        challengePrompt.Visible = false
+        pendingChallengerUserId = nil
+        countdownLabel.Visible = false
+        countdownLabel.Text = ""
+        setChallengePromptsEnabled(false)
+        updateDuelMeta(data)
+        updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName)
+        if data.opponentKind == "monster" then
+            setMonsterChallengePromptsEnabled(false)
+        end
+        task.spawn(function()
+            playDuelIntro(data)
+        end)
+        duelStatusLabel.Text = "Preparando combate"
+        refreshGridVisibility()
         return
     end
 
@@ -1711,8 +2155,12 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         challengePrompt.Visible = false
         pendingChallengerUserId = nil
         setChallengePromptsEnabled(false)
+        updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
         updateEnemyAvatar(data.opponentUserId, data.opponentName)
+        if data.opponentKind == "monster" then
+            setMonsterChallengePromptsEnabled(false)
+        end
         countdownLabel.Visible = true
         countdownLabel.Text = tostring(data.value)
         duelStatusLabel.Text = "Combate inicia en " .. tostring(data.value)
@@ -1726,14 +2174,20 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         setChallengePromptsEnabled(false)
         countdownLabel.Visible = false
         countdownLabel.Text = ""
+        updateDuelMeta(data)
+        hideDuelIntro()
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
         updateEnemyAvatar(data.opponentUserId, data.opponentName)
+        if data.opponentKind == "monster" then
+            setMonsterChallengePromptsEnabled(false)
+        end
         duelStatusLabel.Text = "Combate iniciado"
         refreshGridVisibility()
         return
     end
 
     if data.type == "duel-update" then
+        updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
         updateEnemyAvatar(data.opponentUserId, data.opponentName)
         return
@@ -1744,6 +2198,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         -- Precondiciones:
         --   1. data debe tener element, comboCount, damage, selfHP, enemyHP, opponentName.
         -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+        updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
         duelStatusLabel.Text = tostring(data.opponentName)
             .. " ataco con " .. tostring(data.element)
@@ -1756,6 +2211,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         duelActive = false
         duelStarted = false
         isResolvingServerSync = false
+        hideDuelIntro()
         clearDragState()
         challengePrompt.Visible = false
         pendingChallengerUserId = nil
@@ -1764,6 +2220,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         countdownLabel.Text = ""
         resetDuelHud()
         refreshGridVisibility()
+        setMonsterChallengePromptsEnabled(true)
         local endMsg
         if type(data.winnerUserId) == "number" and data.winnerUserId == player.UserId then
             endMsg = "Victoria"

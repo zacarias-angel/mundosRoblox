@@ -2,6 +2,10 @@
 
 Fecha de actualizacion: 2026-05-22
 
+Terminologia oficial:
+
+- Beastibit = termino general para pet/mascota/monstruo.
+
 ## 1. Vision General
 
 El proyecto combina dos sistemas principales:
@@ -54,7 +58,7 @@ Estado: FUNCIONAL
 - Existe desafio por proximidad entre jugadores.
 - Se valida distancia y disponibilidad de duelo en servidor.
 - Hay flujo completo: challenge sent, received, accepted/declined, timeout, countdown, duel started, duel ended.
-- Vida de ambos lados se calcula desde equipos (TeamManager + MonstersData).
+- Vida de ambos lados se calcula desde equipos de Beastibit (TeamManager + MonstersData).
 - El dano se aplica desde combos procesados por el servidor, no por cliente.
 
 ## 3.2 Flujo PvE contra monstruo NPC
@@ -63,8 +67,19 @@ Estado: FUNCIONAL
 
 - MonsterPromptSetup crea prompts en modelos marcados como monstruo.
 - CombatServer detecta trigger del prompt y arranca duelo NPC.
-- El NPC tiene equipo simulado (x5) y ataques periodicos con elemento/combo random.
+- El NPC tiene equipo simulado de Beastibit (x5) y ataques periodicos con IA v1 equilibrada.
 - El cliente recibe eventos de ataque NPC y actualiza HUD.
+
+Detalles IA NPC v1 (combate):
+
+- Sesgo elemental por especie: la IA prioriza el elemento base del monstruo.
+- Combos por fase de HP:
+  - Fase normal: rango moderado.
+  - Fase de presion (HP del monstruo bajo): rango mas alto.
+  - Fase de remate seguro (HP del jugador bajo): rango reducido para evitar frustracion.
+- Ataque especial con cooldown por turnos: puede lanzar picos controlados de combo con enfriamiento.
+- Anti-rachas: se limita repeticion de combos altos consecutivos.
+- Variacion de elemento entre turnos: se reduce repeticion del mismo elemento seguidamente.
 
 ## 3.3 Motor Match-3
 
@@ -145,6 +160,7 @@ Nota de estado:
 3. Ajustes de posicion/rotacion del contador de estrellas para mejorar lectura.
 4. Cambio de seguimiento del contador hacia patron soldado (tipo pet) para reducir delay.
 5. Integracion de PvpStarsService dentro de CombatServer en alta y baja de jugadores.
+6. IA NPC de combate v1 implementada con sesgo elemental, fases por HP, especial con cooldown y anti-rachas.
 
 ## 7. Lo Que Falta O Requiere Pulido
 
@@ -157,6 +173,7 @@ Nota de estado:
   - abandono
   - empate
 - Balancear dano de MonsterCombat por stats y elementos.
+- Afinar parametros de IA NPC v1 con telemetria (chances, cooldown, umbrales de HP y rangos de combo).
 
 ## 7.2 Estrellas PvP
 

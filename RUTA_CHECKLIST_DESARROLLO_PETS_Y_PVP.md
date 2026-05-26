@@ -1,14 +1,18 @@
 # Ruta y Checklist de Desarrollo
 
 Documento base: RESUMEN_JUEGO_ACTUALIZADO.md
-Objetivo: definir la ruta de produccion sin codigo para sistemas de pets/monstruos, progresion y combate entre domadores.
+Objetivo: definir la ruta de produccion sin codigo para sistemas de Beastibit, progresion y combate entre domadores.
+
+Terminologia oficial:
+
+- Beastibit = termino general para pet/mascota/monstruo.
 
 ## 1. Norte del proyecto
 
 Meta de producto:
 
 - Explorar mundos y biomas.
-- Encontrar, combatir y capturar pets/monstruos.
+- Encontrar, combatir y capturar Beastibit.
 - Progresar por niveles, evoluciones y equipo.
 - Competir en combates de domadores con buen feedback visual.
 
@@ -24,27 +28,27 @@ Pilares:
 
 - [ ] Definir vision final del ciclo principal: explorar -> combatir -> capturar -> progresar -> desafiar.
 - [ ] Definir cantidad objetivo de mundos para version 1.
-- [ ] Definir cantidad objetivo de pets totales para version 1.
+- [ ] Definir cantidad objetivo de Beastibit totales para version 1.
 - [ ] Definir presupuesto de tiempo por sistema (combate, mundo, bestiario, VFX, UX).
 - [ ] Definir criterios de MVP vs Post-MVP.
 
-## 2.2 Bestiario y catalogo de pets
+## 2.2 Bestiario y catalogo de Beastibit
 
 - [ ] Crear estructura del bestiario (ID unico, nombre, elemento, rareza, mundo, bioma, nivel minimo, evoluciones).
-- [ ] Definir cantidad de pets por mundo.
-- [ ] Definir pets por bioma dentro de cada mundo.
+- [ ] Definir cantidad de Beastibit por mundo.
+- [ ] Definir Beastibit por bioma dentro de cada mundo.
 - [ ] Definir convivencia de especies por zona (quienes comparten spawn).
 - [ ] Definir tabla de habitats y horarios/eventos si aplica.
 - [ ] Definir estados del bestiario: visto, encontrado, capturado, evolucionado.
 - [ ] Definir UI del bestiario con filtros (mundo, bioma, elemento, rareza, estado).
 
-## 2.3 Progresion de pets
+## 2.3 Progresion de Beastibit
 
-- [ ] Definir nivel maximo de pet para version 1.
+- [ ] Definir nivel maximo de Beastibit para version 1.
 - [ ] Definir curva de experiencia por nivel.
 - [ ] Definir fuentes de experiencia (combate, entrenamiento, objetos).
 - [ ] Definir reglas de subida de nivel por tipo de actividad.
-- [ ] Definir sistema de 3 evoluciones por pet (condiciones y costos).
+- [ ] Definir sistema de 3 evoluciones por Beastibit (condiciones y costos).
 - [ ] Definir si todas las especies tienen exactamente 3 evoluciones o excepciones.
 - [ ] Definir impacto de evolucion en stats, habilidades y apariencia.
 
@@ -52,15 +56,15 @@ Pilares:
 
 - [ ] Definir que dropea al terminar una pantalla/encuentro.
 - [ ] Definir chance base de drop por tipo de enemigo/pantalla.
-- [ ] Definir si el pet se captura directo o se convierte en recurso de captura.
+- [ ] Definir si el Beastibit se captura directo o se convierte en recurso de captura.
 - [ ] Definir inventario de captura (espacio, limites, orden).
 - [ ] Definir reglas de duplicados (fusion, convertir, vender, comida).
 - [ ] Definir protecciones anti-frustracion (pity, garantias por racha).
 
-## 2.5 Pets como comida/fusion
+## 2.5 Beastibit como comida/fusion
 
-- [ ] Definir cuales pets pueden usarse como comida.
-- [ ] Definir si hay pets protegidos que no pueden sacrificarse.
+- [ ] Definir cuales Beastibit pueden usarse como comida.
+- [ ] Definir si hay Beastibit protegidos que no pueden sacrificarse.
 - [ ] Definir valor de comida por rareza, nivel y evolucion.
 - [ ] Definir UI de confirmacion fuerte para evitar sacrificios accidentales.
 - [ ] Definir costo en recursos para fusionar/alimentar.
@@ -77,12 +81,12 @@ Pilares:
 
 ## 2.7 Spawn y comportamiento en el mundo
 
-- [ ] Definir sistema de respawn de pets (tiempo, cupos, zonas, limpieza).
-- [ ] Definir densidad minima/maxima por bioma.
+- [ ] Definir sistema de respawn de Beastibit (tiempo, cupos, zonas, limpieza).
+- [ ] Definir densidad minima/maxima de Beastibit por bioma.
 - [ ] Definir reglas de spawn por rareza.
-- [ ] Definir movimiento de pets en mundo (idle, patrulla, huida, persecucion).
+- [ ] Definir movimiento de Beastibit en mundo (idle, patrulla, huida, persecucion).
 - [ ] Definir reaccion al jugador (agresivo, neutro, evasivo).
-- [ ] Definir estados de IA basicos por especie.
+- [x] Definir estados de IA basicos por especie. (Baseline tecnico implementado en combate NPC: sesgo elemental + fases por HP + especial con cooldown + anti-rachas)
 - [ ] Definir optimizacion y limites para rendimiento en servidores poblados.
 
 ## 2.8 Combate entre domadores (PvP)
@@ -114,7 +118,7 @@ Pilares:
 - [ ] Definir esquema de datos maestro para especies y progresion.
 - [ ] Definir versionado de datos para futuras expansiones.
 - [ ] Definir metodologia de balance (objetivos por tier/rareza).
-- [ ] Definir metricas a monitorear (uso de pets, winrate, retencion por mundo).
+- [ ] Definir metricas a monitorear (uso de Beastibit, winrate, retencion por mundo).
 
 ## 2.12 QA y publicacion
 
@@ -135,7 +139,7 @@ Entregables:
 
 - Documento de loop principal.
 - Documento de mundos/biomas.
-- Documento de progresion de pets (nivel + evolucion + comida).
+- Documento de progresion de Beastibit (nivel + evolucion + comida).
 - Documento de reglas de captura y drops.
 
 Criterio de cierre:
@@ -157,7 +161,7 @@ Entregables:
 
 Criterio de cierre:
 
-- Se puede responder: cuantos pets hay, donde salen y como progresan.
+- Se puede responder: cuantos Beastibit hay, donde salen y como progresan.
 
 ## Fase 2: Captura, drops y progreso del jugador (1-2 semanas)
 
@@ -174,7 +178,7 @@ Entregables:
 
 Criterio de cierre:
 
-- El jugador puede conseguir pets, subirlos y evolucionarlos sin huecos de diseño.
+- El jugador puede conseguir Beastibit, subirlos y evolucionarlos sin huecos de diseño.
 
 ## Fase 3: Spawn e IA de mundo (1-2 semanas)
 
@@ -231,10 +235,10 @@ Criterio de cierre:
 
 Sprint siguiente recomendado:
 
-1. Cerrar cantidad de mundos y pets del MVP.
+1. Cerrar cantidad de mundos y Beastibit del MVP.
 2. Cerrar reglas de captura/drop y duplicados.
 3. Cerrar regla exacta de 3 evoluciones por especie.
-4. Cerrar politica de comida/fusion de pets.
+4. Cerrar politica de comida/fusion de Beastibit.
 5. Cerrar matriz mundo/bioma/nivel para spawn.
 
 ## 5. Decision Log (para ir llenando)
@@ -246,6 +250,7 @@ Sprint siguiente recomendado:
 - [ ] Decision 005: requisitos finales de evolucion.
 - [ ] Decision 006: recompensas PvP finales.
 - [ ] Decision 007: baseline de VFX MVP.
+- [x] Decision 008: baseline IA de combate NPC v1 (sesgo elemental, fases de HP, especial con cooldown y anti-rachas).
 
 ## 6. Riesgos que hay que controlar
 

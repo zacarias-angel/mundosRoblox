@@ -17,6 +17,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local GameData = ReplicatedStorage:WaitForChild("GameData")
+local MonstersData = require(GameData:WaitForChild("MonstersData"))
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local CombatGrid = require(Modules:WaitForChild("CombatGrid.module"))
@@ -45,6 +47,11 @@ local COMBO_STAGGER_TIME = 0.06
 local FALL_TWEEN_TIME = 0.24
 local BOUNCE_DURATION = 0.12
 local CASCADE_GAP_TIME = 0.08
+local MONSTER_AI_SPECIAL_CHANCE = 0.25
+local MONSTER_AI_SPECIAL_COOLDOWN_TURNS = 3
+local MONSTER_AI_HIGH_COMBO_THRESHOLD = 7
+local MONSTER_AI_PLAYER_LOW_HP_RATIO = 0.3
+local MONSTER_AI_MONSTER_PRESSURE_HP_RATIO = 0.35
 
 local playerStates = {}
 local characterConnections = {}
@@ -53,11 +60,154 @@ local activeDuels = {}
 local activeMonsterDuels = {}
 local duelSequence = 0
 
-local ELEMENTS_LIST = { "Fuego", "Agua", "Planta", "Electricidad" }
+local ELEMENTS_LIST = { "Fuego", "Agua", "Planta", "Electricidad", "Roca" }
 local MONSTER_CHALLENGE_DISTANCE = 15
 local MONSTER_AI_ATTACK_INTERVAL = 4
 local MONSTER_TEAM_SIZE = 5
 local DUEL_PLAYER_DISTANCE = 28
+
+local function chooseWeightedElement(weights)
+    -- Propósito: Elegir un elemento usando pesos acumulados para IA de monstruo.
+    -- Precondiciones:
+    --   1. weights debe ser tabla element->peso.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: string
+    local totalWeight = 0
+    for _, element in ipairs(ELEMENTS_LIST) do
+        totalWeight += math.max(0, tonumber(weights[element]) or 0)
+    end
+
+    if totalWeight <= 0 then
+        return ELEMENTS_LIST[math.random(1, #ELEMENTS_LIST)]
+    end
+
+    local roll = math.random() * totalWeight
+    local cumulative = 0
+    for _, element in ipairs(ELEMENTS_LIST) do
+        cumulative += math.max(0, tonumber(weights[element]) or 0)
+        if roll <= cumulative then
+            return element
+        end
+    end
+
+    return ELEMENTS_LIST[#ELEMENTS_LIST]
+end
+
+local function buildMonsterElementWeights(monsterId)
+    -- Propósito: Construir sesgo elemental de IA según elemento/rareza del monstruo.
+    -- Precondiciones:
+    --   1. monsterId debe ser string válido.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: table
+    local weights = {}
+    for _, element in ipairs(ELEMENTS_LIST) do
+        weights[element] = 1
+    end
+
+    local monsterData = MonstersData[monsterId]
+    if not monsterData then
+        return weights
+    end
+
+    local preferredElement = monsterData.Element
+    if type(preferredElement) == "string" and weights[preferredElement] then
+        local preferredWeight = 3
+        if monsterData.Rarity == "Rare" then
+            preferredWeight = 4
+        end
+        weights[preferredElement] = preferredWeight
+    end
+
+    return weights
+end
+
+local function chooseMonsterComboCount(duel)
+    -- Propósito: Elegir cantidad de combos IA por fase de HP, especial y anti-rachas.
+    -- Precondiciones:
+    --   1. duel debe ser duelo NPC con aiState inicializado.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: number comboCount, boolean usedSpecial
+    local aiState = duel.aiState
+    local playerHpRatio = 1
+    local monsterHpRatio = 1
+
+    if type(duel.playerMaxHP) == "number" and duel.playerMaxHP > 0 then
+        playerHpRatio = math.clamp(duel.playerHP / duel.playerMaxHP, 0, 1)
+    end
+    if type(duel.monsterMaxHP) == "number" and duel.monsterMaxHP > 0 then
+        monsterHpRatio = math.clamp(duel.monsterHP / duel.monsterMaxHP, 0, 1)
+    end
+
+    local minCombo = 2
+    local maxCombo = 5
+    if monsterHpRatio <= MONSTER_AI_MONSTER_PRESSURE_HP_RATIO then
+        minCombo = 4
+        maxCombo = 7
+    end
+    if playerHpRatio <= MONSTER_AI_PLAYER_LOW_HP_RATIO then
+        minCombo = 2
+        maxCombo = 4
+    end
+
+    local useSpecial = false
+    if aiState.specialCooldown <= 0 and playerHpRatio > MONSTER_AI_PLAYER_LOW_HP_RATIO then
+        if math.random() < MONSTER_AI_SPECIAL_CHANCE then
+            minCombo = 7
+            maxCombo = 9
+            useSpecial = true
+        end
+    end
+
+    if aiState.highComboStreak >= 2 then
+        minCombo = 2
+        maxCombo = 5
+        useSpecial = false
+    end
+
+    local comboCount = math.random(minCombo, maxCombo)
+    if playerHpRatio <= MONSTER_AI_PLAYER_LOW_HP_RATIO then
+        comboCount = math.min(comboCount, 5)
+    end
+
+    if useSpecial then
+        aiState.specialCooldown = MONSTER_AI_SPECIAL_COOLDOWN_TURNS
+    elseif aiState.specialCooldown > 0 then
+        aiState.specialCooldown -= 1
+    end
+
+    if comboCount >= MONSTER_AI_HIGH_COMBO_THRESHOLD then
+        aiState.highComboStreak += 1
+    else
+        aiState.highComboStreak = 0
+    end
+
+    return comboCount, useSpecial
+end
+
+local function buildMonsterAiAttack(duel)
+    -- Propósito: Generar ataque de IA con sesgo elemental y control de dificultad.
+    -- Precondiciones:
+    --   1. duel debe tener aiState y elementWeights.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: string element, number comboCount, boolean usedSpecial
+    local aiState = duel.aiState
+    aiState.turnIndex += 1
+
+    local element = chooseWeightedElement(aiState.elementWeights)
+    if aiState.lastElement == element and math.random() < 0.25 then
+        local guardCounter = 0
+        while element == aiState.lastElement and guardCounter < 4 do
+            element = chooseWeightedElement(aiState.elementWeights)
+            guardCounter += 1
+        end
+    end
+
+    local comboCount, usedSpecial = chooseMonsterComboCount(duel)
+    aiState.lastElement = element
+    aiState.lastComboCount = comboCount
+
+    return element, comboCount, usedSpecial
+end
 
 local function dbg(message)
     -- Propósito: Emitir logs de depuración del servidor de combate.
@@ -338,6 +488,28 @@ local function startDuelCountdown(duel)
 
     setupDuelParticipants(duel)
 
+    sendDuelState(duel.playerA, {
+        type = "duel-intro",
+        opponentKind = "player",
+        opponentName = duel.playerB.Name,
+        opponentUserId = duel.playerB.UserId,
+        selfHP = duel.hpByUserId[duel.playerA.UserId],
+        enemyHP = duel.hpByUserId[duel.playerB.UserId],
+        selfStars = PvpStarsService.getStars(duel.playerA),
+        opponentStars = PvpStarsService.getStars(duel.playerB),
+    })
+
+    sendDuelState(duel.playerB, {
+        type = "duel-intro",
+        opponentKind = "player",
+        opponentName = duel.playerA.Name,
+        opponentUserId = duel.playerA.UserId,
+        selfHP = duel.hpByUserId[duel.playerB.UserId],
+        enemyHP = duel.hpByUserId[duel.playerA.UserId],
+        selfStars = PvpStarsService.getStars(duel.playerB),
+        opponentStars = PvpStarsService.getStars(duel.playerA),
+    })
+
     for seconds = COUNTDOWN_SECONDS, 1, -1 do
         if activeDuels[duel.playerA] ~= duel or activeDuels[duel.playerB] ~= duel then
             return
@@ -346,19 +518,25 @@ local function startDuelCountdown(duel)
         sendDuelState(duel.playerA, {
             type = "countdown",
             value = seconds,
+            opponentKind = "player",
             opponentName = duel.playerB.Name,
             opponentUserId = duel.playerB.UserId,
             selfHP = duel.hpByUserId[duel.playerA.UserId],
             enemyHP = duel.hpByUserId[duel.playerB.UserId],
+            selfStars = PvpStarsService.getStars(duel.playerA),
+            opponentStars = PvpStarsService.getStars(duel.playerB),
         })
 
         sendDuelState(duel.playerB, {
             type = "countdown",
             value = seconds,
+            opponentKind = "player",
             opponentName = duel.playerA.Name,
             opponentUserId = duel.playerA.UserId,
             selfHP = duel.hpByUserId[duel.playerB.UserId],
             enemyHP = duel.hpByUserId[duel.playerA.UserId],
+            selfStars = PvpStarsService.getStars(duel.playerB),
+            opponentStars = PvpStarsService.getStars(duel.playerA),
         })
 
         task.wait(1)
@@ -376,18 +554,24 @@ local function startDuelCountdown(duel)
 
     sendDuelState(duel.playerA, {
         type = "duel-started",
+        opponentKind = "player",
         opponentName = duel.playerB.Name,
         opponentUserId = duel.playerB.UserId,
         selfHP = duel.hpByUserId[duel.playerA.UserId],
         enemyHP = duel.hpByUserId[duel.playerB.UserId],
+        selfStars = PvpStarsService.getStars(duel.playerA),
+        opponentStars = PvpStarsService.getStars(duel.playerB),
     })
 
     sendDuelState(duel.playerB, {
         type = "duel-started",
+        opponentKind = "player",
         opponentName = duel.playerA.Name,
         opponentUserId = duel.playerA.UserId,
         selfHP = duel.hpByUserId[duel.playerB.UserId],
         enemyHP = duel.hpByUserId[duel.playerA.UserId],
+        selfStars = PvpStarsService.getStars(duel.playerB),
+        opponentStars = PvpStarsService.getStars(duel.playerA),
     })
 end
 
@@ -653,7 +837,7 @@ local function endMonsterDuel(player, reason, winner)
 end
 
 local function startMonsterAI(player, duel)
-    -- Propósito: Loop IA del monstruo: atacar cada MONSTER_AI_ATTACK_INTERVAL s con elemento+combo random.
+    -- Propósito: Loop IA del monstruo: atacar por intervalos con perfil elemental y dificultad controlada.
     -- Precondiciones:
     --   1. duel debe ser duelo NPC activo con started=true.
     -- Ubicación: ServerScriptService/CombatServer
@@ -666,9 +850,7 @@ local function startMonsterAI(player, duel)
                 break
             end
 
-            -- Elemento random 1-4 y combo random 1-12
-            local element = ELEMENTS_LIST[math.random(1, #ELEMENTS_LIST)]
-            local comboCount = math.random(1, 12)
+            local element, comboCount, usedSpecial = buildMonsterAiAttack(duel)
 
             local monsterComboSummary = {
                 totalCombos = comboCount,
@@ -682,16 +864,32 @@ local function startMonsterAI(player, duel)
 
             sendDuelState(player, {
                 type = "monster-attack",
+                opponentKind = "monster",
                 monsterName = duel.monsterName,
                 element = element,
                 comboCount = comboCount,
+                attackTag = usedSpecial and "special" or "basic",
                 damage = damage,
                 selfHP = duel.playerHP,
                 enemyHP = duel.monsterHP,
                 opponentName = duel.monsterName,
+                selfStars = PvpStarsService.getStars(player),
+                opponentStars = duel.monsterStars,
             })
 
-            dbg("NPC ataco a " .. player.Name .. " | " .. element .. " x" .. comboCount .. " = " .. damage .. " | playerHP=" .. duel.playerHP)
+            dbg(
+                "NPC ataco a "
+                .. player.Name
+                .. " | "
+                .. element
+                .. " x"
+                .. comboCount
+                .. (usedSpecial and " [SPECIAL]" or "")
+                .. " = "
+                .. damage
+                .. " | playerHP="
+                .. duel.playerHP
+            )
 
             if duel.playerHP <= 0 then
                 endMonsterDuel(player, "hp-depleted", "monster")
@@ -708,15 +906,28 @@ local function startMonsterDuelCountdown(player, duel)
     -- Ubicación: ServerScriptService/CombatServer
     -- Retorna: nil
     task.spawn(function()
+        sendDuelState(player, {
+            type = "duel-intro",
+            opponentKind = "monster",
+            opponentName = duel.monsterName,
+            selfHP = duel.playerHP,
+            enemyHP = duel.monsterHP,
+            selfStars = PvpStarsService.getStars(player),
+            opponentStars = duel.monsterStars,
+        })
+
         for seconds = COUNTDOWN_SECONDS, 1, -1 do
             if activeMonsterDuels[player] ~= duel then return end
 
             sendDuelState(player, {
                 type = "countdown",
                 value = seconds,
+                opponentKind = "monster",
                 opponentName = duel.monsterName,
                 selfHP = duel.playerHP,
                 enemyHP = duel.monsterHP,
+                selfStars = PvpStarsService.getStars(player),
+                opponentStars = duel.monsterStars,
             })
             task.wait(1)
         end
@@ -731,9 +942,12 @@ local function startMonsterDuelCountdown(player, duel)
 
         sendDuelState(player, {
             type = "duel-started",
+            opponentKind = "monster",
             opponentName = duel.monsterName,
             selfHP = duel.playerHP,
             enemyHP = duel.monsterHP,
+            selfStars = PvpStarsService.getStars(player),
+            opponentStars = duel.monsterStars,
         })
 
         startMonsterAI(player, duel)
@@ -799,9 +1013,20 @@ local function onMonsterChallenged(player, monsterModel)
         player = player,
         monsterName = monsterModel.Name,
         monsterId = monsterId,
+        monsterStars = 0,
         monsterTeam = monsterTeam,
         playerHP = playerHP,
+        playerMaxHP = playerHP,
         monsterHP = monsterHP,
+        monsterMaxHP = monsterHP,
+        aiState = {
+            turnIndex = 0,
+            lastElement = nil,
+            lastComboCount = 0,
+            highComboStreak = 0,
+            specialCooldown = 0,
+            elementWeights = buildMonsterElementWeights(monsterId),
+        },
         started = false,
     }
 
@@ -815,6 +1040,8 @@ local function onMonsterChallenged(player, monsterModel)
     sendDuelState(player, {
         type = "challenge-sent",
         targetName = monsterModel.Name .. " (x5)",
+        opponentKind = "monster",
+        hideMonsterPromptSeconds = COUNTDOWN_SECONDS + 1,
     })
 
     startMonsterDuelCountdown(player, duel)
@@ -1188,10 +1415,13 @@ local function onCombatSubmit(player, payload)
                 enemyHP = nextHP
                 sendDuelState(player, {
                     type = "duel-update",
+                    opponentKind = "monster",
                     opponentName = monsterDuel.monsterName,
                     selfHP = monsterDuel.playerHP,
                     enemyHP = nextHP,
                     lastDamageDealt = combatDamage.totalDamage,
+                    selfStars = PvpStarsService.getStars(player),
+                    opponentStars = monsterDuel.monsterStars,
                 })
                 if nextHP <= 0 then
                     endMonsterDuel(player, "hp-depleted", "player")
@@ -1208,20 +1438,26 @@ local function onCombatSubmit(player, payload)
 
                 sendDuelState(opponent, {
                     type = "duel-update",
+                    opponentKind = "player",
                     opponentName = player.Name,
                     opponentUserId = player.UserId,
                     selfHP = duel.hpByUserId[opponent.UserId],
                     enemyHP = duel.hpByUserId[player.UserId],
                     lastDamageReceived = combatDamage.totalDamage,
+                    selfStars = PvpStarsService.getStars(opponent),
+                    opponentStars = PvpStarsService.getStars(player),
                 })
 
                 sendDuelState(player, {
                     type = "duel-update",
+                    opponentKind = "player",
                     opponentName = opponent.Name,
                     opponentUserId = opponent.UserId,
                     selfHP = duel.hpByUserId[player.UserId],
                     enemyHP = duel.hpByUserId[opponent.UserId],
                     lastDamageDealt = combatDamage.totalDamage,
+                    selfStars = PvpStarsService.getStars(player),
+                    opponentStars = PvpStarsService.getStars(opponent),
                 })
 
                 if nextHP <= 0 then

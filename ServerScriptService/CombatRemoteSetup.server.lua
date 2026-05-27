@@ -16,6 +16,7 @@
     - CombatChallengeRequest  : Cliente → Servidor  (desafiar jugador cercano)
     - CombatChallengeResponse : Cliente → Servidor  (aceptar/rechazar desafío)
     - CombatDuelState         : Servidor → Cliente  (estado de countdown, inicio y fin)
+    - CombatRosterAction      : Cliente → Servidor  (mochila, seguidor, formación)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -75,3 +76,4 @@ ensureRemoteEvent(remoteEventsFolder, "CombatSync")
 ensureRemoteEvent(remoteEventsFolder, "CombatChallengeRequest")
 ensureRemoteEvent(remoteEventsFolder, "CombatChallengeResponse")
 ensureRemoteEvent(remoteEventsFolder, "CombatDuelState")
+ensureRemoteEvent(remoteEventsFolder, "CombatRosterAction")

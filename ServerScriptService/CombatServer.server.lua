@@ -35,6 +35,7 @@ local CombatSync = RemoteEvents:WaitForChild("CombatSync")
 local CombatChallengeRequest = RemoteEvents:WaitForChild("CombatChallengeRequest")
 local CombatChallengeResponse = RemoteEvents:WaitForChild("CombatChallengeResponse")
 local CombatDuelState = RemoteEvents:WaitForChild("CombatDuelState")
+local CombatRosterAction = RemoteEvents:WaitForChild("CombatRosterAction")
 
 local COLS, ROWS = CombatGrid.getSize()
 local DAMAGE_PER_CELL = 10
@@ -439,39 +440,59 @@ local function endDuel(duel, winner, reason)
         end
     end
 
+    if winner and loser and reason == "hp-depleted" then
+        local winnerStars, loserStars = PvpStarsService.applyPvpDuelResult(winner, loser)
+        dbg(
+            "duelo finalizado: "
+            .. winner.Name
+            .. " venció a "
+            .. loser.Name
+            .. " | estrellas => "
+            .. winner.Name
+            .. ":"
+            .. tostring(winnerStars)
+            .. " / "
+            .. loser.Name
+            .. ":"
+            .. tostring(loserStars)
+        )
+        sendDuelState(winner, {
+            type = "duel-ended",
+            winnerUserId = winner.UserId,
+            opponentUserId = loser.UserId,
+            reason = "hp-depleted",
+            newSelfStars = winnerStars,
+            starsDelta = 1,
+        })
+        sendDuelState(loser, {
+            type = "duel-ended",
+            winnerUserId = winner.UserId,
+            opponentUserId = winner.UserId,
+            reason = "hp-depleted",
+            newSelfStars = loserStars,
+            starsDelta = -1,
+        })
+        return
+    end
+
     sendDuelState(duel.playerA, {
         type = "duel-ended",
         winnerUserId = winner and winner.UserId or nil,
         opponentUserId = duel.playerB and duel.playerB.UserId or nil,
         reason = reason or "duel-ended",
+        newSelfStars = nil,
+        starsDelta = 0,
     })
     sendDuelState(duel.playerB, {
         type = "duel-ended",
         winnerUserId = winner and winner.UserId or nil,
         opponentUserId = duel.playerA and duel.playerA.UserId or nil,
         reason = reason or "duel-ended",
+        newSelfStars = nil,
+        starsDelta = 0,
     })
 
     if winner and loser then
-        if reason == "hp-depleted" then
-            local winnerStars, loserStars = PvpStarsService.applyPvpDuelResult(winner, loser)
-            dbg(
-                "duelo finalizado: "
-                .. winner.Name
-                .. " venció a "
-                .. loser.Name
-                .. " | estrellas => "
-                .. winner.Name
-                .. ":"
-                .. tostring(winnerStars)
-                .. " / "
-                .. loser.Name
-                .. ":"
-                .. tostring(loserStars)
-            )
-            return
-        end
-
         dbg("duelo finalizado: " .. winner.Name .. " venció a " .. loser.Name)
     end
 end
@@ -728,8 +749,10 @@ local function spawnPlayerPetCubes(player)
     -- Retorna: nil
     local state = playerStates[player]
     local team = state and state.team or TeamManager.getOrCreateTeam(player)
+    local selectedFollowerMonsterId = (state and state.followMonsterId)
+        or TeamManager.getSelectedFollowerMonsterId(player)
     task.wait(0.1)
-    PetCubeService.spawnPlayerTeamCubes(player, team)
+    PetCubeService.spawnPlayerTeamCubes(player, team, selectedFollowerMonsterId)
 end
 
 local function bindCharacterSpawn(player)
@@ -759,12 +782,16 @@ local function initPlayerState(player)
     -- Ubicación: ServerScriptService/CombatServer
     -- Retorna: nil
     local team = TeamManager.getOrCreateTeam(player)
+    local backpack = TeamManager.getBackpack(player)
+    local selectedFollowerMonsterId = TeamManager.getSelectedFollowerMonsterId(player)
     local isTeamValid, teamReason = TeamManager.validateTeam(team)
 
     playerStates[player] = {
         grid = createStableGrid(),
         lastSubmit = 0,
         team = team,
+        backpack = backpack,
+        followMonsterId = selectedFollowerMonsterId,
         teamValid = isTeamValid,
         teamReason = teamReason,
         duelId = nil,
@@ -772,7 +799,7 @@ local function initPlayerState(player)
         duelStarted = false,
     }
 
-    PetCubeService.spawnPlayerTeamCubes(player, team)
+    PetCubeService.spawnPlayerTeamCubes(player, team, selectedFollowerMonsterId)
 
     local teamHP = TeamManager.calculateTeamHP(team)
 
@@ -781,6 +808,9 @@ local function initPlayerState(player)
         reason = "initial-sync",
         teamValid = isTeamValid,
         teamReason = teamReason,
+        duelTeam = team,
+        backpack = backpack,
+        selectedFollowerMonsterId = selectedFollowerMonsterId,
         playerTotalHP = teamHP,
         duelActive = false,
         duelStarted = false,
@@ -1229,6 +1259,136 @@ local function onCombatChallengeResponse(player, payload)
     end)
 end
 
+local function sendRosterState(player, reason)
+    -- Propósito: Enviar al cliente el estado actual de mochila, seguidor y equipo de duelo.
+    -- Precondiciones:
+    --   1. player debe ser instancia Player válida.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    local state = playerStates[player]
+    if not state then
+        return
+    end
+
+    local team = TeamManager.getOrCreateTeam(player)
+    local backpack = TeamManager.getBackpack(player)
+    local selectedFollowerMonsterId = TeamManager.getSelectedFollowerMonsterId(player)
+
+    state.team = team
+    state.backpack = backpack
+    state.followMonsterId = selectedFollowerMonsterId
+
+    sendDuelState(player, {
+        type = "roster-sync",
+        reason = reason or "sync",
+        duelTeam = team,
+        backpack = backpack,
+        selectedFollowerMonsterId = selectedFollowerMonsterId,
+    })
+end
+
+local function applyDuelSlotSelection(player, payload)
+    -- Propósito: Reemplazar un slot del equipo de 5 usando un Beastibit desbloqueado.
+    -- Precondiciones:
+    --   1. payload.slotIndex debe ser número entre 1 y 5.
+    --   2. payload.monsterId debe existir y estar desbloqueado.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if type(payload.slotIndex) ~= "number" or type(payload.monsterId) ~= "string" then
+        sendDuelState(player, { type = "roster-error", reason = "invalid-payload" })
+        return
+    end
+
+    local slotIndex = math.floor(payload.slotIndex)
+    if slotIndex < 1 or slotIndex > 5 then
+        sendDuelState(player, { type = "roster-error", reason = "invalid-slot" })
+        return
+    end
+
+    if MonstersData[payload.monsterId] == nil then
+        sendDuelState(player, { type = "roster-error", reason = "monster-data-missing" })
+        return
+    end
+
+    local backpack = TeamManager.getBackpack(player)
+    local isUnlocked = false
+    for _, item in ipairs(backpack) do
+        if item.MonsterId == payload.monsterId and item.Unlocked == true then
+            isUnlocked = true
+            break
+        end
+    end
+
+    if not isUnlocked then
+        sendDuelState(player, { type = "roster-error", reason = "monster-locked" })
+        return
+    end
+
+    local currentTeam = TeamManager.getOrCreateTeam(player)
+    currentTeam[slotIndex] = {
+        MonsterId = payload.monsterId,
+    }
+
+    local isValid, reason = TeamManager.setTeam(player, currentTeam)
+    if not isValid then
+        sendDuelState(player, { type = "roster-error", reason = reason or "team-invalid" })
+        return
+    end
+
+    local state = playerStates[player]
+    if state then
+        state.team = TeamManager.getOrCreateTeam(player)
+    end
+
+    sendRosterState(player, "duel-team-updated")
+end
+
+local function onCombatRosterAction(player, payload)
+    -- Propósito: Procesar acciones de mochila/formación enviadas por el cliente.
+    -- Precondiciones:
+    --   1. payload.action debe ser string válido.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if type(payload) ~= "table" or type(payload.action) ~= "string" then
+        return
+    end
+
+    local state = playerStates[player]
+    if not state then
+        return
+    end
+
+    if state.duelActive then
+        sendDuelState(player, { type = "roster-error", reason = "duel-active" })
+        return
+    end
+
+    if payload.action == "request" then
+        sendRosterState(player, "manual-request")
+        return
+    end
+
+    if payload.action == "select-follower" then
+        local isValid, reason = TeamManager.setSelectedFollowerMonsterId(player, payload.monsterId)
+        if not isValid then
+            sendDuelState(player, { type = "roster-error", reason = reason or "invalid-follower" })
+            return
+        end
+
+        state.followMonsterId = TeamManager.getSelectedFollowerMonsterId(player)
+        PetCubeService.spawnPlayerTeamCubes(player, state.team or TeamManager.getOrCreateTeam(player), state.followMonsterId)
+        sendRosterState(player, "follower-updated")
+        return
+    end
+
+    if payload.action == "set-duel-slot" then
+        applyDuelSlotSelection(player, payload)
+        return
+    end
+
+    sendDuelState(player, { type = "roster-error", reason = "unknown-action" })
+end
+
 local function printGrid(grid)
     -- Imprime el estado del tablero en consola (por filas)
     for row = 1, ROWS do
@@ -1523,6 +1683,7 @@ end)
 CombatSubmit.OnServerEvent:Connect(onCombatSubmit)
 CombatChallengeRequest.OnServerEvent:Connect(onCombatChallengeRequest)
 CombatChallengeResponse.OnServerEvent:Connect(onCombatChallengeResponse)
+CombatRosterAction.OnServerEvent:Connect(onCombatRosterAction)
 
 for _, player in ipairs(Players:GetPlayers()) do
     PvpStarsService.onPlayerAdded(player)

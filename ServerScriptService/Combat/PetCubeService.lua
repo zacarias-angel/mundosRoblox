@@ -97,11 +97,12 @@ function PetCubeService.clearPlayerCubes(player)
     end
 end
 
-function PetCubeService.spawnPlayerTeamCubes(player, team)
-    -- Propósito: Mostrar 5 cubos del equipo activo cerca del jugador.
+function PetCubeService.spawnPlayerTeamCubes(player, team, selectedFollowerMonsterId)
+    -- Propósito: Mostrar 1 cubo seguidor del Beastibit seleccionado fuera de duelo.
     -- Precondiciones:
     --   1. player debe ser instancia Player válida.
     --   2. team debe ser tabla de mascotas.
+    --   3. selectedFollowerMonsterId puede ser string o nil.
     -- Ubicación: ServerScriptService/Combat/PetCubeService
     -- Retorna: nil
     if type(team) ~= "table" then
@@ -127,34 +128,43 @@ function PetCubeService.spawnPlayerTeamCubes(player, team)
     playerFolder.Name = player.Name
     playerFolder.Parent = worldFolder
 
-    local radius = 6
-    for index, pet in ipairs(team) do
-        local monsterData = MonstersData[pet.MonsterId]
-        if monsterData then
-            local element = monsterData.Element
-            local template = templateFolder:FindFirstChild("Cube_" .. tostring(element))
-            if template and template:IsA("Part") then
-                local angle = math.rad((index - 1) * (360 / math.max(1, #team)))
-                local offset = Vector3.new(math.cos(angle) * radius, 2.5, math.sin(angle) * radius)
+    local followerMonsterId = nil
+    if type(selectedFollowerMonsterId) == "string" and MonstersData[selectedFollowerMonsterId] ~= nil then
+        followerMonsterId = selectedFollowerMonsterId
+    elseif type(team[1]) == "table" and type(team[1].MonsterId) == "string" then
+        followerMonsterId = team[1].MonsterId
+    end
 
-                local cube = template:Clone()
-                cube.Name = "PetCube_" .. tostring(index)
-                cube.Anchored = false
-                cube.Massless = true
-                cube.CanCollide = false
-                cube.CanQuery = false
-                cube.CanTouch = false
-                cube.CFrame = hrp.CFrame * CFrame.new(offset)
+    if type(followerMonsterId) ~= "string" then
+        return
+    end
 
-                local weld = Instance.new("WeldConstraint")
-                weld.Name = "FollowWeld"
-                weld.Part0 = cube
-                weld.Part1 = hrp
-                weld.Parent = cube
+    local monsterData = MonstersData[followerMonsterId]
+    if not monsterData then
+        return
+    end
 
-                cube.Parent = playerFolder
-            end
-        end
+    local element = monsterData.Element
+    local template = templateFolder:FindFirstChild("Cube_" .. tostring(element))
+    if template and template:IsA("Part") then
+        local offset = Vector3.new(0, 2.5, 5)
+
+        local cube = template:Clone()
+        cube.Name = "PetCube_Follower"
+        cube.Anchored = false
+        cube.Massless = true
+        cube.CanCollide = false
+        cube.CanQuery = false
+        cube.CanTouch = false
+        cube.CFrame = hrp.CFrame * CFrame.new(offset)
+
+        local weld = Instance.new("WeldConstraint")
+        weld.Name = "FollowWeld"
+        weld.Part0 = cube
+        weld.Part1 = hrp
+        weld.Parent = cube
+
+        cube.Parent = playerFolder
     end
 end
 

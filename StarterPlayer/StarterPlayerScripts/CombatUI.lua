@@ -99,6 +99,9 @@ local duelIntroInProgress = false
 local monsterPromptRestoreToken = 0
 local pendingChallengerUserId = nil
 local challengePromptRefs = {}
+local setRosterVisible = function(_visible)
+    -- Mochila desactivada temporalmente para estabilizar CombatUI.
+end
 
 local function dbg(message)
     -- Propósito: Emitir logs de depuración del cliente de combate.
@@ -532,6 +535,132 @@ challengeRejectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 challengeRejectButton.Text = "Rechazar"
 challengeRejectButton.Parent = challengePrompt
 Instance.new("UICorner", challengeRejectButton).CornerRadius = UDim.new(0, 6)
+
+-- MOCHILA / FORMACIÓN desactivada temporalmente.
+
+-- ============================================================
+-- OVERLAY RESULTADO: VICTORIA / DERROTA
+-- ============================================================
+
+local duelResultOverlay = Instance.new("Frame")
+duelResultOverlay.Name = "DuelResultOverlay"
+duelResultOverlay.Size = UDim2.fromScale(1, 1)
+duelResultOverlay.Position = UDim2.fromScale(0, 0)
+duelResultOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+duelResultOverlay.BackgroundTransparency = 0.35
+duelResultOverlay.BorderSizePixel = 0
+duelResultOverlay.Visible = false
+duelResultOverlay.ZIndex = 60
+duelResultOverlay.Parent = screenGui
+
+local duelResultCard = Instance.new("Frame")
+duelResultCard.Name = "ResultCard"
+duelResultCard.AnchorPoint = Vector2.new(0.5, 0.5)
+duelResultCard.Position = UDim2.new(0.5, 0, 0.5, 0)
+duelResultCard.Size = UDim2.new(0, 380, 0, 340)
+duelResultCard.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+duelResultCard.BackgroundTransparency = 0.05
+duelResultCard.BorderSizePixel = 0
+duelResultCard.ZIndex = 61
+duelResultCard.Parent = duelResultOverlay
+Instance.new("UICorner", duelResultCard).CornerRadius = UDim.new(0, 18)
+
+local duelResultTitleLabel = Instance.new("TextLabel")
+duelResultTitleLabel.Name = "ResultTitle"
+duelResultTitleLabel.AnchorPoint = Vector2.new(0.5, 0)
+duelResultTitleLabel.Position = UDim2.new(0.5, 0, 0, 22)
+duelResultTitleLabel.Size = UDim2.new(1, -24, 0, 72)
+duelResultTitleLabel.BackgroundTransparency = 1
+duelResultTitleLabel.Font = Enum.Font.GothamBlack
+duelResultTitleLabel.TextSize = 58
+duelResultTitleLabel.TextColor3 = Color3.fromRGB(255, 230, 60)
+duelResultTitleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+duelResultTitleLabel.TextStrokeTransparency = 0.1
+duelResultTitleLabel.Text = "VICTORIA"
+duelResultTitleLabel.ZIndex = 62
+duelResultTitleLabel.Parent = duelResultCard
+
+local duelResultStarsDelta = Instance.new("TextLabel")
+duelResultStarsDelta.Name = "StarsDelta"
+duelResultStarsDelta.AnchorPoint = Vector2.new(0.5, 0)
+duelResultStarsDelta.Position = UDim2.new(0.5, 0, 0, 102)
+duelResultStarsDelta.Size = UDim2.new(1, -24, 0, 38)
+duelResultStarsDelta.BackgroundTransparency = 1
+duelResultStarsDelta.Font = Enum.Font.GothamBold
+duelResultStarsDelta.TextSize = 26
+duelResultStarsDelta.TextColor3 = Color3.fromRGB(100, 220, 100)
+duelResultStarsDelta.Text = "+1 ⭐"
+duelResultStarsDelta.ZIndex = 62
+duelResultStarsDelta.Parent = duelResultCard
+
+local duelResultStarsTotal = Instance.new("TextLabel")
+duelResultStarsTotal.Name = "StarsTotal"
+duelResultStarsTotal.AnchorPoint = Vector2.new(0.5, 0)
+duelResultStarsTotal.Position = UDim2.new(0.5, 0, 0, 144)
+duelResultStarsTotal.Size = UDim2.new(1, -24, 0, 28)
+duelResultStarsTotal.BackgroundTransparency = 1
+duelResultStarsTotal.Font = Enum.Font.Gotham
+duelResultStarsTotal.TextSize = 18
+duelResultStarsTotal.TextColor3 = Color3.fromRGB(220, 200, 130)
+duelResultStarsTotal.Text = "Total: ⭐ 0"
+duelResultStarsTotal.ZIndex = 62
+duelResultStarsTotal.Parent = duelResultCard
+
+-- Separador visual
+local duelResultSeparator = Instance.new("Frame")
+duelResultSeparator.Name = "Separator"
+duelResultSeparator.AnchorPoint = Vector2.new(0.5, 0)
+duelResultSeparator.Position = UDim2.new(0.5, 0, 0, 182)
+duelResultSeparator.Size = UDim2.new(0.85, 0, 0, 2)
+duelResultSeparator.BackgroundColor3 = Color3.fromRGB(60, 65, 90)
+duelResultSeparator.BackgroundTransparency = 0
+duelResultSeparator.BorderSizePixel = 0
+duelResultSeparator.ZIndex = 62
+duelResultSeparator.Parent = duelResultCard
+
+-- Área de drops (placeholder para futuro farmeo)
+local duelResultDropsArea = Instance.new("Frame")
+duelResultDropsArea.Name = "DropsArea"
+duelResultDropsArea.AnchorPoint = Vector2.new(0.5, 0)
+duelResultDropsArea.Position = UDim2.new(0.5, 0, 0, 194)
+duelResultDropsArea.Size = UDim2.new(0.9, 0, 0, 80)
+duelResultDropsArea.BackgroundColor3 = Color3.fromRGB(22, 26, 40)
+duelResultDropsArea.BackgroundTransparency = 0.1
+duelResultDropsArea.BorderSizePixel = 0
+duelResultDropsArea.ZIndex = 62
+duelResultDropsArea.Parent = duelResultCard
+Instance.new("UICorner", duelResultDropsArea).CornerRadius = UDim.new(0, 10)
+
+local duelResultDropsLabel = Instance.new("TextLabel")
+duelResultDropsLabel.Name = "DropsLabel"
+duelResultDropsLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+duelResultDropsLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+duelResultDropsLabel.Size = UDim2.new(1, -12, 1, -8)
+duelResultDropsLabel.BackgroundTransparency = 1
+duelResultDropsLabel.Font = Enum.Font.Gotham
+duelResultDropsLabel.TextSize = 14
+duelResultDropsLabel.TextColor3 = Color3.fromRGB(120, 130, 160)
+duelResultDropsLabel.Text = "[ Drops próximamente ]"
+duelResultDropsLabel.ZIndex = 63
+duelResultDropsLabel.Parent = duelResultDropsArea
+
+-- Botón Continuar
+local duelResultContinueBtn = Instance.new("TextButton")
+duelResultContinueBtn.Name = "ContinueButton"
+duelResultContinueBtn.AnchorPoint = Vector2.new(0.5, 1)
+duelResultContinueBtn.Position = UDim2.new(0.5, 0, 1, -18)
+duelResultContinueBtn.Size = UDim2.new(0.7, 0, 0, 42)
+duelResultContinueBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+duelResultContinueBtn.BorderSizePixel = 0
+duelResultContinueBtn.Font = Enum.Font.GothamBold
+duelResultContinueBtn.TextSize = 20
+duelResultContinueBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+duelResultContinueBtn.Text = "Continuar"
+duelResultContinueBtn.ZIndex = 62
+duelResultContinueBtn.Parent = duelResultCard
+Instance.new("UICorner", duelResultContinueBtn).CornerRadius = UDim.new(0, 10)
+
+-- ============================================================
 
 local gridFrame = Instance.new("Frame")
 gridFrame.Name = "GridFrame"
@@ -1212,6 +1341,66 @@ challengeRejectButton.MouseButton1Click:Connect(function()
     respondToChallenge(false)
 end)
 
+duelResultContinueBtn.MouseButton1Click:Connect(function()
+    -- Propósito: Cerrar la pantalla de resultado al pulsar Continuar.
+    -- Precondiciones: Ninguna.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    duelResultOverlay.Visible = false
+end)
+
+local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind)
+    -- Propósito: Mostrar overlay de Victoria o Derrota con cambio de estrellas.
+    -- Precondiciones:
+    --   1. isVictory debe ser boolean.
+    --   2. starsDelta puede ser number o nil (0 si es beastibit sin cambio de stars).
+    --   3. newStarsTotal puede ser number o nil.
+    --   4. opponentKind puede ser "player" o "monster".
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    local delta = tonumber(starsDelta) or 0
+    local kind = tostring(opponentKind or "player")
+
+    if isVictory then
+        duelResultTitleLabel.Text = "VICTORIA"
+        duelResultTitleLabel.TextColor3 = Color3.fromRGB(255, 230, 60)
+        duelResultCard.BackgroundColor3 = Color3.fromRGB(14, 22, 14)
+    else
+        duelResultTitleLabel.Text = "DERROTA"
+        duelResultTitleLabel.TextColor3 = Color3.fromRGB(220, 80, 80)
+        duelResultCard.BackgroundColor3 = Color3.fromRGB(22, 10, 10)
+    end
+
+    if kind == "player" then
+        if delta > 0 then
+            duelResultStarsDelta.Text = "+" .. tostring(delta) .. " ⭐"
+            duelResultStarsDelta.TextColor3 = Color3.fromRGB(100, 220, 100)
+        elseif delta < 0 then
+            duelResultStarsDelta.Text = tostring(delta) .. " ⭐"
+            duelResultStarsDelta.TextColor3 = Color3.fromRGB(220, 80, 80)
+        else
+            duelResultStarsDelta.Text = ""
+        end
+
+        if type(newStarsTotal) == "number" then
+            duelResultStarsTotal.Text = "Total: ⭐ " .. tostring(newStarsTotal)
+            duelResultStarsTotal.Visible = true
+        else
+            local currentStars = sanitizeStars(player:GetAttribute("PvpStars"))
+            duelResultStarsTotal.Text = "Total: ⭐ " .. tostring(currentStars)
+            duelResultStarsTotal.Visible = true
+        end
+    else
+        -- Beastibit: no hay cambio de stars PvP
+        duelResultStarsDelta.Text = ""
+        duelResultStarsTotal.Visible = false
+    end
+
+    duelResultDropsLabel.Text = "[ Drops próximamente ]"
+
+    duelResultOverlay.Visible = true
+end
+
 local function renderGrid()
     -- Propósito: Refrescar colores, labels y bordes de toda la grilla.
     -- Precondiciones:
@@ -1837,6 +2026,166 @@ local function submitTurn()
     rerender()
 end
 
+local inputHandlers = {}
+
+function inputHandlers.handleCellMouseDown(col, row)
+    -- Propósito: Iniciar drag con mouse en una celda específica.
+    -- Precondiciones:
+    --   1. localGrid debe existir.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if not localGrid then
+        return
+    end
+    isPrimaryMouseDown = true
+    dbg("MouseButton1Down en fila " .. row .. " col " .. col)
+    startTurn(col, row)
+end
+
+function inputHandlers.handleCellTouchBegan(input, col, row)
+    -- Propósito: Iniciar drag táctil en una celda específica.
+    -- Precondiciones:
+    --   1. input.UserInputType debe ser Touch.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if input.UserInputType ~= Enum.UserInputType.Touch then
+        return
+    end
+    if not localGrid then
+        return
+    end
+    dragStartPos = input.Position
+    dbg("TouchStart en fila " .. row .. " col " .. col)
+    startTurn(col, row)
+end
+
+function inputHandlers.handleCellMouseEnter(col, row)
+    -- Propósito: Procesar posible swap cuando el cursor entra a una celda durante drag.
+    -- Precondiciones:
+    --   1. Debe existir drag activo.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if not isDragging or not isPrimaryMouseDown or not dragCurrentCell then
+        return
+    end
+
+    local now = os.clock()
+    if now - lastSwapTime < SWAP_COOLDOWN then
+        return
+    end
+
+    local targetKey = cellKey(col, row)
+    if targetKey == lastHoverKey then
+        return
+    end
+    lastHoverKey = targetKey
+
+    if not CombatGrid.areAdjacent(dragCurrentCell.col, dragCurrentCell.row, col, row) then
+        return
+    end
+
+    dbg("objetivo drag fila " .. row .. " col " .. col)
+    local didSwap = setDragTarget(col, row)
+    if didSwap then
+        lastSwapTime = now
+        dragStartPos = UserInputService:GetMouseLocation()
+    end
+end
+
+function inputHandlers.handleInputEnded(input)
+    -- Propósito: Cerrar drag para mouse/touch al terminar input.
+    -- Precondiciones: Ninguna.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and (isPrimaryMouseDown or isDragging) then
+        isPrimaryMouseDown = false
+        ghostFrame.Visible = false
+        if isDragging then
+            dbg("MouseButton1Up")
+            submitTurn()
+        end
+    end
+
+    if input.UserInputType == Enum.UserInputType.Touch and isDragging then
+        submitTurn()
+    end
+end
+
+function inputHandlers.handleGlobalInputBegan(input, gameProcessed)
+    -- Propósito: Gestionar atajos globales de teclado para combate.
+    -- Precondiciones:
+    --   1. gameProcessed debe ser false.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if gameProcessed then
+        return
+    end
+
+    if input.KeyCode == Enum.KeyCode.R then
+        isGridVisible = not isGridVisible
+        refreshGridVisibility()
+        dbg("Tablero " .. (isGridVisible and "mostrado" or "oculto"))
+    elseif input.KeyCode == Enum.KeyCode.Y then
+        respondToChallenge(true)
+    elseif input.KeyCode == Enum.KeyCode.N then
+        respondToChallenge(false)
+    end
+end
+
+function inputHandlers.handleTouchMoved(touch, gameProcessed)
+    -- Propósito: Actualizar drag táctil y aplicar swaps adyacentes.
+    -- Precondiciones:
+    --   1. Debe existir drag activo.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if gameProcessed then
+        return
+    end
+
+    if not isDragging then
+        return
+    end
+
+    showGhost(dragCurrentCell.col, dragCurrentCell.row, touch.Position)
+
+    local now = os.clock()
+    if now - lastSwapTime < SWAP_COOLDOWN then
+        return
+    end
+
+    if not dragStartPos then
+        dragStartPos = touch.Position
+        return
+    end
+
+    local delta = touch.Position - dragStartPos
+    if delta.Magnitude < DRAG_THRESHOLD then
+        return
+    end
+
+    local col, row = getCellFromMouse(touch.Position)
+    if not col or not row then
+        return
+    end
+
+    if not CombatGrid.areAdjacent(dragCurrentCell.col, dragCurrentCell.row, col, row) then
+        return
+    end
+
+    local targetKey = cellKey(col, row)
+    if targetKey == lastHoverKey then
+        return
+    end
+    lastHoverKey = targetKey
+
+    dbg("objetivo touch fila " .. row .. " col " .. col)
+    local didSwap = setDragTarget(col, row)
+    if didSwap then
+        lastSwapTime = now
+        dragStartPos = touch.Position
+    end
+end
+
 local function connectCellInput()
     -- Propósito: Conectar input mouse/touch sobre la grilla.
     -- Precondiciones:
@@ -1846,62 +2195,20 @@ local function connectCellInput()
     for col = 1, COLS do
         for row = 1, ROWS do
             local btn = cellButtons[col][row]
-            local c, r = col, row
+            local c = col
+            local r = row
 
             btn.MouseButton1Down:Connect(function()
-                if not localGrid then
-                    return
-                end
-                isPrimaryMouseDown = true
-                dbg("MouseButton1Down en fila " .. r .. " col " .. c)
-                startTurn(c, r)
+                inputHandlers.handleCellMouseDown(c, r)
             end)
 
             btn.InputBegan:Connect(function(input)
-                if input.UserInputType ~= Enum.UserInputType.Touch then
-                    return
-                end
-                if not localGrid then
-                    return
-                end
-                dragStartPos = input.Position
-                dbg("TouchStart en fila " .. r .. " col " .. c)
-                startTurn(c, r)
+                inputHandlers.handleCellTouchBegan(input, c, r)
             end)
 
             btn.MouseEnter:Connect(function()
-                -- Propósito: Aplicar swap al entrar a una celda durante drag de mouse.
-                -- Precondiciones:
-                --   1. Debe existir un drag activo con botón principal presionado.
-                -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
-                -- Retorna: nil
-                if not isDragging or not isPrimaryMouseDown or not dragCurrentCell then
-                    return
-                end
-
-                local now = os.clock()
-                if now - lastSwapTime < SWAP_COOLDOWN then
-                    return
-                end
-
-                local targetKey = cellKey(c, r)
-                if targetKey == lastHoverKey then
-                    return
-                end
-                lastHoverKey = targetKey
-
-                if not CombatGrid.areAdjacent(dragCurrentCell.col, dragCurrentCell.row, c, r) then
-                    return
-                end
-
-                dbg("objetivo drag fila " .. r .. " col " .. c)
-                local didSwap = setDragTarget(c, r)
-                if didSwap then
-                    lastSwapTime = now
-                    dragStartPos = UserInputService:GetMouseLocation()
-                end
+                inputHandlers.handleCellMouseEnter(c, r)
             end)
-
         end
     end
 
@@ -1914,90 +2221,10 @@ local function connectCellInput()
         showGhost(dragCurrentCell.col, dragCurrentCell.row, mousePos)
     end)
 
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 and (isPrimaryMouseDown or isDragging) then
-            isPrimaryMouseDown = false
-            ghostFrame.Visible = false
-            if isDragging then
-                dbg("MouseButton1Up")
-                submitTurn()
-            end
-        end
-
-        if input.UserInputType == Enum.UserInputType.Touch and isDragging then
-            submitTurn()
-        end
-    end)
-
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.R then
-            -- Propósito: Alternar visibilidad del tablero con tecla R.
-            -- Precondiciones: container debe existir.
-            -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
-            -- Retorna: nil
-            isGridVisible = not isGridVisible
-            refreshGridVisibility()
-            dbg("Tablero " .. (isGridVisible and "mostrado" or "oculto"))
-        elseif input.KeyCode == Enum.KeyCode.Y then
-            respondToChallenge(true)
-        elseif input.KeyCode == Enum.KeyCode.N then
-            respondToChallenge(false)
-        end
-    end)
-
-    UserInputService.TouchMoved:Connect(function(touch, gameProcessed)
-        if gameProcessed then
-            return
-        end
-
-        if not isDragging then
-            return
-        end
-        showGhost(dragCurrentCell.col, dragCurrentCell.row, touch.Position)
-
-        local now = os.clock()
-        if now - lastSwapTime < SWAP_COOLDOWN then
-            return
-        end
-
-        if not dragStartPos then
-            dragStartPos = touch.Position
-            return
-        end
-
-        local delta = touch.Position - dragStartPos
-        if delta.Magnitude < DRAG_THRESHOLD then
-            return
-        end
-
-        local hoverCol, hoverRow = getCellFromMouse(touch.Position)
-        if not hoverCol or not hoverRow then
-            return
-        end
-
-        if not CombatGrid.areAdjacent(dragCurrentCell.col, dragCurrentCell.row, hoverCol, hoverRow) then
-            return
-        end
-
-        local col = hoverCol
-        local row = hoverRow
-
-        local targetKey = cellKey(col, row)
-        if targetKey == lastHoverKey then
-            return
-        end
-        lastHoverKey = targetKey
-
-        dbg("objetivo touch fila " .. row .. " col " .. col)
-        local didSwap = setDragTarget(col, row)
-        if didSwap then
-            lastSwapTime = now
-            dragStartPos = touch.Position
-        end
-    end)
-
-    UserInputService.TouchEnded:Connect(function(_touch, _gameProcessed)
+    UserInputService.InputEnded:Connect(inputHandlers.handleInputEnded)
+    UserInputService.InputBegan:Connect(inputHandlers.handleGlobalInputBegan)
+    UserInputService.TouchMoved:Connect(inputHandlers.handleTouchMoved)
+    UserInputService.TouchEnded:Connect(function()
         if isDragging then
             submitTurn()
         end
@@ -2106,6 +2333,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
     end
 
     if data.type == "duel-intro" then
+        setRosterVisible(false)
         duelActive = true
         duelStarted = false
         challengePrompt.Visible = false
@@ -2161,6 +2389,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
     end
 
     if data.type == "countdown" then
+        setRosterVisible(false)
         duelActive = true
         duelStarted = false
         challengePrompt.Visible = false
@@ -2180,6 +2409,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
     end
 
     if data.type == "duel-started" then
+        setRosterVisible(false)
         duelActive = true
         duelStarted = true
         setChallengePromptsEnabled(false)
@@ -2229,11 +2459,19 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         setChallengePromptsEnabled(true)
         countdownLabel.Visible = false
         countdownLabel.Text = ""
+        local endedOpponentKind = duelOpponentKind
         resetDuelHud()
         refreshGridVisibility()
         setMonsterChallengePromptsEnabled(true)
+
+        local isVictory = type(data.winnerUserId) == "number" and data.winnerUserId == player.UserId
+        local deltaStars = tonumber(data.starsDelta) or 0
+        local newStarsTotal = tonumber(data.newSelfStars)
+
+        showDuelResult(isVictory, deltaStars, newStarsTotal, endedOpponentKind)
+
         local endMsg
-        if type(data.winnerUserId) == "number" and data.winnerUserId == player.UserId then
+        if isVictory then
             endMsg = "Victoria"
         elseif type(data.winnerUserId) == "number" then
             endMsg = "Derrota"

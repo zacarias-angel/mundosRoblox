@@ -1,6 +1,6 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-05-22
+Fecha de actualizacion: 2026-05-27
 
 Terminologia oficial:
 
@@ -24,6 +24,7 @@ Arquitectura actual:
 ## 2.1 Combate Match-3 y Duelos
 
 - StarterPlayer/StarterPlayerScripts/CombatUI.lua
+- StarterPlayer/StarterPlayerScripts/RosterUI.client.lua
 - ServerScriptService/CombatServer.server.lua
 - ServerScriptService/CombatRemoteSetup.server.lua
 - ServerScriptService/MonsterPromptSetup.server.lua
@@ -105,6 +106,18 @@ Estado: FUNCIONAL Y PULIDO BASE
 - Estados visuales de countdown/inicio/fin de duelo.
 - Layout tactil para movil.
 
+## 3.5 UI de Mochila y Formacion (separada de CombatUI)
+
+Estado: FUNCIONAL BASE
+
+- La mochila/formacion se movio a un LocalScript independiente: StarterPlayer/StarterPlayerScripts/RosterUI.client.lua.
+- La comunicacion cliente-servidor se mantiene por eventos (CombatRosterAction y estados roster-sync/roster-error en CombatDuelState).
+- Se elimino la dependencia de mochila dentro de CombatUI para reducir complejidad y evitar limite de registros locales en Luau.
+- La UI de mochila ahora usa ranuras cuadradas en grid (no lista de texto).
+- La vista de seleccionado, seguidor y slots del team usa celdas cuadradas preparadas para imagen por Beastibit.
+- Soporta fallback seguro de imagen si el Beastibit no tiene AssetId.
+- Se ajusto safe area para evitar superposicion con el menu nativo de Roblox.
+
 ## 4. Sistema De Estrellas PvP (nuevo avance)
 
 Estado: IMPLEMENTADO
@@ -161,6 +174,9 @@ Nota de estado:
 4. Cambio de seguimiento del contador hacia patron soldado (tipo pet) para reducir delay.
 5. Integracion de PvpStarsService dentro de CombatServer en alta y baja de jugadores.
 6. IA NPC de combate v1 implementada con sesgo elemental, fases por HP, especial con cooldown y anti-rachas.
+7. Separacion de UI de mochila/formacion en script dedicado (RosterUI.client) para desacoplar de CombatUI.
+8. Migracion de mochila y team a interfaz por ranuras cuadradas en grid, preparada para imagen por Beastibit.
+9. Ajuste de safe area de UI de mochila para respetar topbar/menu nativo de Roblox.
 
 ## 7. Lo Que Falta O Requiere Pulido
 
@@ -192,6 +208,12 @@ Nota de estado:
 - Todavia hay scripts con print/warn directos en vez de pasar por modulo Debug.
 - Existen scripts legacy en otrojuegosimilar que conviene archivar formalmente o mover a carpeta de referencia documentada.
 - Conviene actualizar documentacion principal para reflejar el sistema de estrellas PvP ya implementado.
+
+## 7.5 Mochila y presentacion visual
+
+- Cargar y validar AssetId final por Beastibit en MonstersData para reemplazar fallback visual.
+- Ajustar estilo final de badges (LOCK/UNLOCK/FOLLOW/slot) y legibilidad en resoluciones pequenas.
+- Evaluar drag and drop futuro para asignacion de team (actualmente por click/tap).
 
 ## 8. Riesgos Tecnicos Detectados
 

@@ -112,6 +112,9 @@ Pilares:
 - [ ] Diseñar UI de progresion por mundo/bioma.
 - [ ] Diseñar guia de domador (tutorial progresivo por etapas).
 - [ ] Definir mensajes de onboarding para nuevos sistemas.
+- [x] Implementar base tecnica de UI de mochila/formacion en script cliente separado de CombatUI.
+- [x] Migrar mochila y slots de team a ranuras cuadradas (grid) preparadas para imagen por Beastibit.
+- [x] Ajustar UI de mochila a safe area para no superponerse al menu nativo/topbar de Roblox.
 
 ## 2.11 Datos y balance
 

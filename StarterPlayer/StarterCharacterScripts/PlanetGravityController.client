@@ -21,7 +21,9 @@
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlanetGravityMath
@@ -241,6 +243,7 @@ local humanoid = character:WaitForChild("Humanoid")
 local hrp = character:WaitForChild("HumanoidRootPart")
 local camera = workspace.CurrentCamera
 local controlsInterface = nil
+local playerGui = player:WaitForChild("PlayerGui")
 
 local GRAVITY_ACCEL = 120
 local MOVE_SPEED = 34
@@ -325,11 +328,45 @@ local lastJumpTime = -100
 local lastUpVector = Vector3.new(0, 1, 0)
 local planetScanAcc = PLANET_SCAN_INTERVAL
 local activePlanetData = nil
+local activeSkyMode = nil
 local hasSnappedToSurface = false
 local isFlyMode = false
 local flyUp = false
 local flyDown = false
 local controlsInitRetryAcc = CONTROLS_INIT_RETRY_INTERVAL
+
+local PLANET_SKY_NAME = "__WORLDFX"
+local SPACE_SKY_NAME = "GalaxySky"
+local SKY_FADE_OUT_TIME = 0.2
+local SKY_FADE_HOLD_TIME = 0.05
+local SKY_FADE_IN_TIME = 0.28
+local skyWarnedByName = {}
+local pendingSkyMode = nil
+local skyTransitionInProgress = false
+local skyStorageFolder = script:FindFirstChild("SkyStorage")
+if not skyStorageFolder then
+	skyStorageFolder = Instance.new("Folder")
+	skyStorageFolder.Name = "SkyStorage"
+	skyStorageFolder.Parent = script
+end
+
+local skyFadeGui = Instance.new("ScreenGui")
+skyFadeGui.Name = "PlanetSkyFadeGui"
+skyFadeGui.ResetOnSpawn = false
+skyFadeGui.IgnoreGuiInset = true
+skyFadeGui.DisplayOrder = 1000
+skyFadeGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+skyFadeGui.Parent = playerGui
+
+local skyFadeFrame = Instance.new("Frame")
+skyFadeFrame.Name = "Fade"
+skyFadeFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+skyFadeFrame.BackgroundTransparency = 1
+skyFadeFrame.BorderSizePixel = 0
+skyFadeFrame.Size = UDim2.fromScale(1, 1)
+skyFadeFrame.Position = UDim2.fromScale(0, 0)
+skyFadeFrame.Visible = false
+skyFadeFrame.Parent = skyFadeGui
 
 local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator")
 animator.Parent = humanoid
@@ -340,6 +377,210 @@ local groundRayParams = RaycastParams.new()
 groundRayParams.FilterType = Enum.RaycastFilterType.Exclude
 groundRayParams.FilterDescendantsInstances = {character}
 groundRayParams.IgnoreWater = true
+
+--[[
+Funcion: findSkyByName
+
+Proposito:
+Buscar un objeto Sky por nombre en Lighting o en el almacen temporal local.
+
+Precondiciones:
+- skyName debe ser string no vacio.
+
+Requiere:
+- Lighting disponible.
+
+Devuelve:
+- Sky o nil.
+]]
+local function findSkyByName(skyName)
+	if type(skyName) ~= "string" or skyName == "" then
+		return nil
+	end
+
+	local lightingSky = Lighting:FindFirstChild(skyName)
+	if lightingSky and lightingSky:IsA("Sky") then
+		return lightingSky
+	end
+
+	local storedSky = skyStorageFolder:FindFirstChild(skyName)
+	if storedSky and storedSky:IsA("Sky") then
+		return storedSky
+	end
+
+	return nil
+end
+
+--[[
+Funcion: warnMissingSkyOnce
+
+Proposito:
+Emitir una sola advertencia por sky faltante para evitar spam en consola.
+
+Precondiciones:
+- skyName debe ser string no vacio.
+
+Requiere:
+- skyWarnedByName inicializado.
+
+Devuelve:
+- nil
+]]
+local function warnMissingSkyOnce(skyName)
+	if skyWarnedByName[skyName] then
+		return
+	end
+
+	skyWarnedByName[skyName] = true
+	warn("PlanetGravityController: no se encontro Sky '" .. skyName .. "' en Lighting")
+end
+
+--[[
+Funcion: resetSkyFadeOverlay
+
+Proposito:
+Restaurar el overlay de fade a estado transparente e invisible.
+
+Precondiciones:
+- skyFadeFrame debe estar inicializado.
+
+Requiere:
+- Ninguno.
+
+Devuelve:
+- nil
+]]
+local function resetSkyFadeOverlay()
+	skyFadeFrame.BackgroundTransparency = 1
+	skyFadeFrame.Visible = false
+end
+
+--[[
+Funcion: tweenSkyFade
+
+Proposito:
+Animar la opacidad del overlay usado para suavizar el cambio de sky.
+
+Precondiciones:
+- targetTransparency debe ser number valido entre 0 y 1.
+- duration debe ser number mayor o igual a 0.
+
+Requiere:
+- skyFadeFrame inicializado.
+
+Devuelve:
+- nil
+]]
+local function tweenSkyFade(targetTransparency, duration)
+	skyFadeFrame.Visible = true
+	local tween = TweenService:Create(
+		skyFadeFrame,
+		TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ BackgroundTransparency = targetTransparency }
+	)
+	tween:Play()
+	tween.Completed:Wait()
+	if targetTransparency >= 1 then
+		skyFadeFrame.Visible = false
+	end
+end
+
+--[[
+Funcion: applySkyModeImmediately
+
+Proposito:
+Aplicar el sky activo sin transicion, moviendo el sky inactivo al almacen local.
+
+Precondiciones:
+- mode debe ser "planet" o "space".
+
+Requiere:
+- El sky deseado debe existir.
+
+Devuelve:
+- boolean indicando si el cambio se aplico.
+]]
+local function applySkyModeImmediately(mode)
+	local desiredSkyName = mode == "planet" and PLANET_SKY_NAME or SPACE_SKY_NAME
+	local inactiveSkyName = mode == "planet" and SPACE_SKY_NAME or PLANET_SKY_NAME
+	local desiredSky = findSkyByName(desiredSkyName)
+	if not desiredSky then
+		warnMissingSkyOnce(desiredSkyName)
+		return false
+	end
+
+	local inactiveSky = findSkyByName(inactiveSkyName)
+	if inactiveSky and inactiveSky ~= desiredSky then
+		inactiveSky.Parent = skyStorageFolder
+	end
+
+	desiredSky.Parent = Lighting
+	activeSkyMode = mode
+	return true
+end
+
+--[[
+Funcion: setSkyMode
+
+Proposito:
+Activar el sky correspondiente al estado actual: planeta o espacio.
+
+Precondiciones:
+- mode debe ser "planet" o "space".
+
+Requiere:
+- Los objetos Sky deben existir en Lighting al menos una vez para poder encontrarlos.
+
+Devuelve:
+- nil
+]]
+local function setSkyMode(mode)
+	if mode ~= "planet" and mode ~= "space" then
+		return
+	end
+
+	if activeSkyMode == mode or pendingSkyMode == mode then
+		return
+	end
+
+	if activeSkyMode == nil and not skyTransitionInProgress then
+		if applySkyModeImmediately(mode) then
+			resetSkyFadeOverlay()
+		end
+		return
+	end
+
+	pendingSkyMode = mode
+	if skyTransitionInProgress then
+		return
+	end
+
+	skyTransitionInProgress = true
+	task.spawn(function()
+		while pendingSkyMode and pendingSkyMode ~= activeSkyMode do
+			local targetMode = pendingSkyMode
+			pendingSkyMode = nil
+
+			tweenSkyFade(0, SKY_FADE_OUT_TIME)
+			local changed = applySkyModeImmediately(targetMode)
+			if not changed then
+				resetSkyFadeOverlay()
+				break
+			end
+
+			if SKY_FADE_HOLD_TIME > 0 then
+				task.wait(SKY_FADE_HOLD_TIME)
+			end
+
+			tweenSkyFade(1, SKY_FADE_IN_TIME)
+		end
+
+		skyTransitionInProgress = false
+		if skyFadeFrame.BackgroundTransparency < 1 then
+			resetSkyFadeOverlay()
+		end
+	end)
+end
 
 --[[
 Funcion: tryResolveActivePlanet
@@ -362,6 +603,7 @@ local function tryResolveActivePlanet()
 		if activePlanetData then
 			warn("PlanetGravityController: sin planeta activo, gravedad desactivada temporalmente")
 		end
+		setSkyMode("space")
 		activePlanetData = nil
 		desiredRadiusFromCenter = nil
 		warnedInsideSphere = false
@@ -371,11 +613,13 @@ local function tryResolveActivePlanet()
 
 	if not activePlanetData or activePlanetData.model ~= bestPlanet.model then
 		warn("PlanetGravityController: planeta activo -> " .. bestPlanet.model.Name)
+		setSkyMode("planet")
 		activePlanetData = bestPlanet
 		desiredRadiusFromCenter = bestPlanet.radius + bestPlanet.surfaceOffset
 		warnedInsideSphere = false
 		hasSnappedToSurface = false
 	else
+		setSkyMode("planet")
 		activePlanetData = bestPlanet
 		if not desiredRadiusFromCenter then
 			desiredRadiusFromCenter = bestPlanet.radius + bestPlanet.surfaceOffset

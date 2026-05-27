@@ -1171,6 +1171,18 @@ local function bindChallengePrompts()
     Players.PlayerRemoving:Connect(function(otherPlayer)
         clearChallengePromptForPlayer(otherPlayer)
     end)
+
+    task.spawn(function()
+        -- Refresco defensivo: corrige casos en los que un Character/HRP replica tarde.
+        while screenGui.Parent do
+            for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                if otherPlayer ~= player then
+                    ensureChallengePromptForPlayer(otherPlayer)
+                end
+            end
+            task.wait(2)
+        end
+    end)
 end
 
 applyTouchLayout()

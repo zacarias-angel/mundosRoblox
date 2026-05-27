@@ -10,15 +10,35 @@
 
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
 
 -- Esperar a que los RemoteEvents estén listos antes de continuar
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents", 10)
 local CombatDuelState = RemoteEvents and RemoteEvents:WaitForChild("CombatDuelState", 10)
 
 local MONSTER_CHALLENGE_DISTANCE = 15
+local MONSTER_TAG = "MonsterNPC"
 
 -- Tabla de monstruos registrados: modelo -> true
 local registeredModels = {}
+
+local function isMonsterModel(model)
+    -- Propósito: Determinar si un modelo debe tratarse como monstruo desafiante.
+    -- Retorna: boolean
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    if model:GetAttribute("IsMonster") == true then
+        return true
+    end
+
+    if type(model:GetAttribute("MonsterId")) == "string" then
+        return true
+    end
+
+    return CollectionService:HasTag(model, MONSTER_TAG)
+end
 
 local function getModelRoot(model)
     -- Propósito: Obtener la BasePart principal de un modelo para alojar el ProximityPrompt.
@@ -46,6 +66,13 @@ local function setupPromptOnModel(model)
     -- Ubicación: ServerScriptService/MonsterPromptSetup
     -- Retorna: nil
     if registeredModels[model] then return end
+    if not isMonsterModel(model) then return end
+
+    -- Estandarizamos atributos para que CombatServer lo detecte sin depender de tags.
+    model:SetAttribute("IsMonster", true)
+    if type(model:GetAttribute("MonsterId")) ~= "string" then
+        model:SetAttribute("MonsterId", model.Name)
+    end
 
     local root = getModelRoot(model)
     if not root then
@@ -70,34 +97,26 @@ local function setupPromptOnModel(model)
     print("[MonsterPromptSetup] Prompt creado en " .. model.Name .. " -> parte: " .. root.Name)
 end
 
--- Escanear todos los hijos actuales del Workspace
-for _, obj in ipairs(workspace:GetChildren()) do
-    if obj:IsA("Model") and (obj:GetAttribute("IsMonster") or obj:GetAttribute("MonsterId")) then
+-- Escanear todos los modelos actuales del Workspace
+for _, obj in ipairs(workspace:GetDescendants()) do
+    if obj:IsA("Model") then
         setupPromptOnModel(obj)
     end
 end
 
--- Esperar a Demonslime1 específicamente (con timeout)
-task.spawn(function()
-    local demonSlime = workspace:WaitForChild("Demonslime1", 30)
-    if not demonSlime then
-        warn("[MonsterPromptSetup] Demonslime1 no encontrado en Workspace")
-        return
+-- Detectar nuevos monstruos añadidos al Workspace
+workspace.DescendantAdded:Connect(function(obj)
+    task.wait(0.5)
+    if obj:IsA("Model") then
+        setupPromptOnModel(obj)
     end
-
-    -- Dar un frame para que sus hijos carguen
-    task.wait(0.1)
-
-    demonSlime:SetAttribute("IsMonster", true)
-    demonSlime:SetAttribute("MonsterId", "Demonslime1")
-    setupPromptOnModel(demonSlime)
 end)
 
--- Detectar nuevos monstruos añadidos al Workspace
-workspace.ChildAdded:Connect(function(obj)
-    task.wait(0.5)
-    if obj:IsA("Model") and (obj:GetAttribute("IsMonster") or obj:GetAttribute("MonsterId")) then
-        setupPromptOnModel(obj)
+-- Detectar tags agregados en runtime (flujo recomendado para escalar contenido).
+CollectionService:GetInstanceAddedSignal(MONSTER_TAG):Connect(function(instance)
+    if instance and instance:IsA("Model") then
+        task.wait(0.1)
+        setupPromptOnModel(instance)
     end
 end)
 

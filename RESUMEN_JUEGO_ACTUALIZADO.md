@@ -1,6 +1,6 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-05-27
+Fecha de actualizacion: 2026-05-28
 
 Terminologia oficial:
 
@@ -33,6 +33,7 @@ Arquitectura actual:
 - ServerScriptService/Combat/PetCubeService.lua
 - ServerScriptService/Combat/PvpStarsService.lua
 - ReplicatedStorage/Modules/CombatGrid.module.lua
+- ReplicatedStorage/Modules/BeastibitVisuals.module.lua
 - ReplicatedStorage/Modules/Debug.lua
 - ReplicatedStorage/GameData/MonstersData.lua
 
@@ -117,6 +118,25 @@ Estado: FUNCIONAL BASE
 - La vista de seleccionado, seguidor y slots del team usa celdas cuadradas preparadas para imagen por Beastibit.
 - Soporta fallback seguro de imagen si el Beastibit no tiene AssetId.
 - Se ajusto safe area para evitar superposicion con el menu nativo de Roblox.
+- La resolucion de imagen por Beastibit ahora contempla evolucion (img.evo1/evo2/evo3 + evoActual) y mantiene fallback legacy.
+
+## 3.6 Beastibit seguidor 3D (nuevo avance)
+
+Estado: IMPLEMENTADO (BASE ESTABLE)
+
+Archivo principal: ServerScriptService/Combat/PetCubeService.lua
+
+Funcionalidad actual:
+
+- Spawn hibrido: intenta modelo 3D por Beastibit y si falla usa cubo por elemento como fallback seguro.
+- Fuente de modelos en ServerStorage/BeastibitTemplates (con fallback temporal a Workspace para transicion).
+- Separacion explicita companion vs salvaje:
+  - Companion clonado marca IsCompanion=true e IsMonster=false.
+  - Se elimina MonsterChallengePrompt heredado en el clon companion.
+  - MonsterPromptSetup evita crear prompt en companions y en PlayerPetCubes.
+- Follow organico en servidor con lerp/catch-up/teleport de seguridad.
+- Follow adaptado a gravedad planetaria (usa UpVector local del personaje, no eje Y global).
+- Configuracion de follow y orientacion movida a MonstersData por especie (CompanionFollow), evitando depender de muchos atributos en el modelo template.
 
 ## 4. Sistema De Estrellas PvP (nuevo avance)
 
@@ -177,6 +197,11 @@ Nota de estado:
 7. Separacion de UI de mochila/formacion en script dedicado (RosterUI.client) para desacoplar de CombatUI.
 8. Migracion de mochila y team a interfaz por ranuras cuadradas en grid, preparada para imagen por Beastibit.
 9. Ajuste de safe area de UI de mochila para respetar topbar/menu nativo de Roblox.
+10. Integracion de BeastibitVisuals.module para unificar seleccion de imagen por evolucion en UI.
+11. Implementacion de Beastibit seguidor 3D con fallback automatico a cubo por seguridad.
+12. Separacion companion/salvaje para evitar prompts de desafio en Beastibit seguidores.
+13. Ajuste de follow para gravedad planetaria usando ejes locales del personaje.
+14. Configuracion de follow por especie en MonstersData (CompanionFollow).
 
 ## 7. Lo Que Falta O Requiere Pulido
 
@@ -215,12 +240,19 @@ Nota de estado:
 - Ajustar estilo final de badges (LOCK/UNLOCK/FOLLOW/slot) y legibilidad en resoluciones pequenas.
 - Evaluar drag and drop futuro para asignacion de team (actualmente por click/tap).
 
+## 7.6 Beastibit seguidor 3D
+
+- Calibrar valores CompanionFollow por especie para pose final (yaw/pitch/roll, distancia y altura).
+- Estandarizar pivote/origen de modelos template para reducir offsets extremos.
+- Preparar animaciones reales de locomocion companion (actualmente follow por PivotTo).
+
 ## 8. Riesgos Tecnicos Detectados
 
 1. Persistencia DataStore: no hay estrategia de reintentos/cola para fallos temporales.
 2. Logging en produccion: alto ruido de consola en varios scripts.
 3. Complejidad creciente de CombatServer: conviene separar en sub-modulos (duelos, NPC, damage, sync).
 4. PlanetGravityController es robusto pero largo; mantenimiento puede complicarse sin separar en modulos cliente.
+5. Variacion de pivote/orientacion entre modelos Beastibit puede requerir calibracion por especie.
 
 ## 9. Resumen Ejecutivo
 
@@ -230,6 +262,7 @@ Estado general del proyecto: SOLIDO Y JUGABLE.
 - Duelos PvP/PvE: funcionales con estados completos.
 - Gravedad planetaria: funcional con sistema avanzado de movimiento y camara.
 - Nuevo progreso PvP por estrellas: implementado e integrado.
+- Beastibit seguidor 3D: implementado con fallback, separacion companion/salvaje y base planet-aware.
 
 Siguiente foco recomendado:
 

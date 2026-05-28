@@ -77,22 +77,37 @@ Monsters.GolemRoca = {
 }
 
 Monsters.Demonslime1 = {
-    Name = "Demon Slime",
-    Element = "Fuego",
-    Rarity = "Rare",
-    img = {
-        evo1 = "rbxassetid://0",
-        evo2 = "rbxassetid://0",
-        evo3 = "rbxassetid://0",
-    },
-    evoActual = 1,
-    ModelTemplate = "Demonslime1",
-    StarterUnlocked = false,
-    BaseStats = {
-        Attack = 200,
-        HP = 5000,
-        Speed = 1,
-    },
+	Name = "Demon Slime",
+	Element = "Fuego",
+	Rarity = "Rare",
+	CompanionFollow = {
+		UsePlanetUp = true,
+		YawOffsetDeg = 180,
+		PitchOffsetDeg = -90,
+		RollOffsetDeg = 0,
+
+		Distance = 3.3,
+		SideOffset = 0,
+		HeightOffset = 3.25,
+
+		LerpSpeed = 6,
+		CatchupSpeed = 8,
+		CatchupDistance = 7,
+		TeleportDistance = 24,
+	},
+	img = {
+		evo1 = "rbxassetid://133572570435726",
+		evo2 = "rbxassetid://133572570435726",
+		evo3 = "rbxassetid://133572570435726",
+	},
+	evoActual = 1,
+	ModelTemplate = "Demonslime1",
+	StarterUnlocked = true,
+	BaseStats = {
+		Attack = 200,
+		HP = 5000,
+		Speed = 1,
+	},
 }
 
 Monsters.ZorroBrasa = {

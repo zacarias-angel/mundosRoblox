@@ -87,6 +87,7 @@ Pilares:
 - [ ] Definir movimiento de Beastibit en mundo (idle, patrulla, huida, persecucion).
 - [ ] Definir reaccion al jugador (agresivo, neutro, evasivo).
 - [x] Definir estados de IA basicos por especie. (Baseline tecnico implementado en combate NPC: sesgo elemental + fases por HP + especial con cooldown + anti-rachas)
+- [x] Separar Beastibit companion de Beastibit salvaje para evitar prompts/flows cruzados. (Companion marca IsCompanion=true + IsMonster=false y MonsterPromptSetup excluye companions)
 - [ ] Definir optimizacion y limites para rendimiento en servidores poblados.
 
 ## 2.8 Combate entre domadores (PvP)
@@ -119,6 +120,7 @@ Pilares:
 ## 2.11 Datos y balance
 
 - [ ] Definir esquema de datos maestro para especies y progresion.
+- [x] Definir esquema base de visual companion por especie en data. (MonstersData: img/evoActual + CompanionFollow)
 - [ ] Definir versionado de datos para futuras expansiones.
 - [ ] Definir metodologia de balance (objetivos por tier/rareza).
 - [ ] Definir metricas a monitorear (uso de Beastibit, winrate, retencion por mundo).
@@ -254,6 +256,8 @@ Sprint siguiente recomendado:
 - [ ] Decision 006: recompensas PvP finales.
 - [ ] Decision 007: baseline de VFX MVP.
 - [x] Decision 008: baseline IA de combate NPC v1 (sesgo elemental, fases de HP, especial con cooldown y anti-rachas).
+- [x] Decision 009: companion follow configurado por especie en MonstersData (CompanionFollow) en lugar de atributos por modelo.
+- [x] Decision 010: follow de companion adaptado a gravedad planetaria usando UpVector local.
 
 ## 6. Riesgos que hay que controlar
 

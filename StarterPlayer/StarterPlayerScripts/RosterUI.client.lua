@@ -9,6 +9,8 @@ local GuiService = game:GetService("GuiService")
 
 local GameData = ReplicatedStorage:WaitForChild("GameData")
 local MonstersData = require(GameData:WaitForChild("MonstersData"))
+local Modules = ReplicatedStorage:WaitForChild("Modules")
+local BeastibitVisuals = require(Modules:WaitForChild("BeastibitVisuals.module"))
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local CombatDuelState = RemoteEvents:WaitForChild("CombatDuelState")
@@ -411,32 +413,7 @@ local function getMonsterImage(monsterId)
     --   1. monsterId puede ser string o nil.
     -- Ubicación: StarterPlayer/StarterPlayerScripts/RosterUI.client
     -- Retorna: string
-    if type(monsterId) ~= "string" then
-        return "rbxassetid://0"
-    end
-
-    local data = MonstersData[monsterId]
-    if type(data) ~= "table" then
-        return "rbxassetid://0"
-    end
-
-    local raw = data.Image or data.ImageId or data.Icon or data.Thumbnail
-    if type(raw) == "number" then
-        return "rbxassetid://" .. tostring(math.floor(raw))
-    end
-
-    if type(raw) == "string" and raw ~= "" then
-        if string.find(raw, "rbxassetid://", 1, true) then
-            return raw
-        end
-        local numeric = tonumber(raw)
-        if numeric then
-            return "rbxassetid://" .. tostring(math.floor(numeric))
-        end
-        return raw
-    end
-
-    return "rbxassetid://0"
+    return BeastibitVisuals.getImageByMonsterId(MonstersData, monsterId)
 end
 
 local function paintSlot(slot, monsterId, unlocked, badgeText, isSelected)

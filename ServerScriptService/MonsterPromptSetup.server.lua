@@ -29,6 +29,19 @@ local function isMonsterModel(model)
         return false
     end
 
+    if model:GetAttribute("IsCompanion") == true then
+        return false
+    end
+
+    if model:GetAttribute("IsMonster") == false then
+        return false
+    end
+
+    local playerPetFolder = workspace:FindFirstChild("PlayerPetCubes")
+    if playerPetFolder and model:IsDescendantOf(playerPetFolder) then
+        return false
+    end
+
     if model:GetAttribute("IsMonster") == true then
         return true
     end
@@ -80,9 +93,9 @@ local function setupPromptOnModel(model)
         return
     end
 
-    -- Eliminar prompt anterior si existe
-    local existing = root:FindFirstChild("MonsterChallengePrompt")
-    if existing then existing:Destroy() end
+    if root:FindFirstChild("MonsterChallengePrompt") then
+        root.MonsterChallengePrompt:Destroy()
+    end
 
     local prompt = Instance.new("ProximityPrompt")
     prompt.Name = "MonsterChallengePrompt"

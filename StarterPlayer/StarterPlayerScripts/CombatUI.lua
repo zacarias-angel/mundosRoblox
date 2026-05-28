@@ -17,6 +17,10 @@ local TweenService = game:GetService("TweenService")
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local CombatGrid = require(Modules:WaitForChild("CombatGrid.module"))
+local BeastibitVisuals = require(Modules:WaitForChild("BeastibitVisuals.module"))
+
+local GameData = ReplicatedStorage:WaitForChild("GameData")
+local MonstersData = require(GameData:WaitForChild("MonstersData"))
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local CombatSubmit = RemoteEvents:WaitForChild("CombatSubmit")
@@ -94,6 +98,7 @@ local duelEnemyStars = 0
 local duelOpponentName = "Sin oponente"
 local duelOpponentUserId = nil
 local duelOpponentKind = "player"
+local duelOpponentMonsterId = nil
 local duelIntroToken = 0
 local duelIntroInProgress = false
 local monsterPromptRestoreToken = 0
@@ -839,6 +844,12 @@ local function updateDuelMeta(data)
         duelOpponentKind = "player"
     end
 
+    if type(data.opponentMonsterId) == "string" then
+        duelOpponentMonsterId = data.opponentMonsterId
+    elseif duelOpponentKind ~= "monster" then
+        duelOpponentMonsterId = nil
+    end
+
     if type(data.selfStars) == "number" then
         duelSelfStars = sanitizeStars(data.selfStars)
     else
@@ -893,6 +904,15 @@ local function fillDuelIntroCard(avatarImage, avatarFallback, nameLabel, starsLa
     avatarFallback.Visible = true
 
     return type(userId) == "number" and userId or nil
+end
+
+local function resolveMonsterImage(monsterId)
+    -- Propósito: Resolver imagen de Beastibit NPC para HUD/intro de duelo.
+    -- Precondiciones:
+    --   1. monsterId puede ser string o nil.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: string
+    return BeastibitVisuals.getImageByMonsterId(MonstersData, monsterId)
 end
 
 local function applyIntroAvatarAsync(avatarImage, avatarFallback, userId, token)
@@ -1002,9 +1022,11 @@ local function playDuelIntro(data)
     local enemyDisplayName = duelOpponentName
     local enemyUserId = type(data.opponentUserId) == "number" and data.opponentUserId or nil
     local enemyFallback = "B"
+    local enemyMonsterImage = nil
     if duelOpponentKind == "monster" then
         enemyUserId = nil
         enemyFallback = "M"
+        enemyMonsterImage = resolveMonsterImage(data.opponentMonsterId or duelOpponentMonsterId)
     end
 
     local selfAvatarUserId = fillDuelIntroCard(
@@ -1027,6 +1049,11 @@ local function playDuelIntro(data)
         enemyUserId,
         enemyFallback
     )
+
+    if type(enemyMonsterImage) == "string" and enemyMonsterImage ~= "" and enemyMonsterImage ~= "rbxassetid://0" then
+        duelIntroRightAvatar.Image = enemyMonsterImage
+        duelIntroRightFallback.Visible = false
+    end
 
     applyIntroAvatarAsync(duelIntroLeftAvatar, duelIntroLeftFallback, selfAvatarUserId, token)
     applyIntroAvatarAsync(duelIntroRightAvatar, duelIntroRightFallback, enemyAvatarUserId, token)
@@ -1066,7 +1093,7 @@ local function playDuelIntro(data)
     duelIntroInProgress = false
 end
 
-local function updateEnemyAvatar(userId, opponentName)
+local function updateEnemyAvatar(userId, opponentName, opponentMonsterId)
     -- Propósito: Mostrar mini avatar del contrincante en esquina superior derecha.
     -- Precondiciones:
     --   1. userId puede ser nil o number.
@@ -1074,6 +1101,14 @@ local function updateEnemyAvatar(userId, opponentName)
     -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
     -- Retorna: nil
     enemyAvatarLabel.Text = tostring(opponentName or "Rival")
+
+    if duelOpponentKind == "monster" then
+        local image = resolveMonsterImage(opponentMonsterId or duelOpponentMonsterId)
+        duelOpponentUserId = nil
+        enemyAvatarImage.Image = image
+        enemyAvatarFrame.Visible = true
+        return
+    end
 
     if type(userId) ~= "number" then
         duelOpponentUserId = nil
@@ -1105,8 +1140,9 @@ local function resetDuelHud()
     duelOpponentName = "Sin oponente"
     duelOpponentUserId = nil
     duelOpponentKind = "player"
+    duelOpponentMonsterId = nil
     updateHPHud(duelSelfHP, duelEnemyHP, duelOpponentName)
-    updateEnemyAvatar(nil, nil)
+    updateEnemyAvatar(nil, nil, nil)
 end
 
 local function requestChallengeToPlayer(targetPlayer)
@@ -2343,7 +2379,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         setChallengePromptsEnabled(false)
         updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
-        updateEnemyAvatar(data.opponentUserId, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName, data.opponentMonsterId)
         if data.opponentKind == "monster" then
             setMonsterChallengePromptsEnabled(false)
         end
@@ -2397,7 +2433,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         setChallengePromptsEnabled(false)
         updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
-        updateEnemyAvatar(data.opponentUserId, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName, data.opponentMonsterId)
         if data.opponentKind == "monster" then
             setMonsterChallengePromptsEnabled(false)
         end
@@ -2418,7 +2454,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         updateDuelMeta(data)
         hideDuelIntro()
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
-        updateEnemyAvatar(data.opponentUserId, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName, data.opponentMonsterId)
         if data.opponentKind == "monster" then
             setMonsterChallengePromptsEnabled(false)
         end
@@ -2430,7 +2466,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
     if data.type == "duel-update" then
         updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
-        updateEnemyAvatar(data.opponentUserId, data.opponentName)
+        updateEnemyAvatar(data.opponentUserId, data.opponentName, data.opponentMonsterId)
         return
     end
 

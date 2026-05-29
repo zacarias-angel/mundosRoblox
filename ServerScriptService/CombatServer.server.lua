@@ -66,6 +66,7 @@ local MONSTER_CHALLENGE_DISTANCE = 15
 local MONSTER_AI_ATTACK_INTERVAL = 4
 local MONSTER_TEAM_SIZE = 5
 local DUEL_PLAYER_DISTANCE = 28
+local MONSTER_DUEL_PLAYER_DISTANCE = 22
 
 local function chooseWeightedElement(weights)
     -- Propósito: Elegir un elemento usando pesos acumulados para IA de monstruo.
@@ -843,6 +844,38 @@ local function endMonsterDuel(player, reason, winner)
     -- Retorna: nil
     local duel = activeMonsterDuels[player]
     if not duel then return end
+
+    if duel.player then
+        if duel.anchorStateByUserId and duel.anchorStateByUserId[duel.player.UserId] then
+            local participant = duel.player
+            local previousState = duel.anchorStateByUserId[participant.UserId]
+            if participant.Character then
+                local hrp = participant.Character:FindFirstChild("HumanoidRootPart")
+                local humanoid = participant.Character:FindFirstChildOfClass("Humanoid")
+
+                if hrp and hrp:IsA("BasePart") then
+                    hrp.Anchored = previousState.wasAnchored or false
+                end
+
+                if humanoid then
+                    if type(previousState.walkSpeed) == "number" then
+                        humanoid.WalkSpeed = previousState.walkSpeed
+                    end
+                    if type(previousState.jumpPower) == "number" then
+                        humanoid.JumpPower = previousState.jumpPower
+                    end
+                    if type(previousState.autoRotate) == "boolean" then
+                        humanoid.AutoRotate = previousState.autoRotate
+                    end
+                end
+
+                local participantState = playerStates[participant]
+                local team = participantState and participantState.team or TeamManager.getOrCreateTeam(participant)
+                PetCubeService.spawnPlayerTeamCubes(participant, team)
+            end
+        end
+    end
+
     activeMonsterDuels[player] = nil
 
     local state = playerStates[player]
@@ -864,6 +897,62 @@ local function endMonsterDuel(player, reason, winner)
     })
 
     dbg("duelo NPC finalizado: " .. player.Name .. " | razon=" .. tostring(reason) .. " | ganador=" .. tostring(winner))
+end
+
+local function setupMonsterDuelParticipant(duel)
+    -- Propósito: Posicionar y anclar al jugador frente al monstruo para duelo NPC y formar Beastibit en línea.
+    -- Precondiciones:
+    --   1. duel debe tener player y monsterRoot válidos.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if not duel or not duel.player or not duel.monsterRoot then
+        return
+    end
+
+    local player = duel.player
+    local character = player.Character
+    if not character then
+        return
+    end
+
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hrp:IsA("BasePart") then
+        return
+    end
+
+    local monsterPos = duel.monsterRoot.Position
+    local flatDir = Vector3.new(hrp.Position.X - monsterPos.X, 0, hrp.Position.Z - monsterPos.Z)
+    if flatDir.Magnitude < 1e-4 then
+        flatDir = Vector3.new(0, 0, -1)
+    end
+    local forward = flatDir.Unit
+
+    local targetPos = monsterPos + (forward * MONSTER_DUEL_PLAYER_DISTANCE)
+    targetPos = Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z)
+
+    duel.anchorStateByUserId = duel.anchorStateByUserId or {}
+    duel.anchorStateByUserId[player.UserId] = {
+        wasAnchored = hrp.Anchored,
+        walkSpeed = humanoid and humanoid.WalkSpeed or nil,
+        jumpPower = humanoid and humanoid.JumpPower or nil,
+        autoRotate = humanoid and humanoid.AutoRotate or nil,
+    }
+
+    hrp.Anchored = true
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    hrp.CFrame = CFrame.lookAt(targetPos, Vector3.new(monsterPos.X, targetPos.Y, monsterPos.Z), Vector3.new(0, 1, 0))
+
+    if humanoid then
+        humanoid.AutoRotate = false
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+    end
+
+    local participantState = playerStates[player]
+    local team = participantState and participantState.team or TeamManager.getOrCreateTeam(player)
+    PetCubeService.spawnPlayerTeamDuelLine(player, team, monsterPos)
 end
 
 local function startMonsterAI(player, duel)
@@ -937,6 +1026,8 @@ local function startMonsterDuelCountdown(player, duel)
     -- Ubicación: ServerScriptService/CombatServer
     -- Retorna: nil
     task.spawn(function()
+        setupMonsterDuelParticipant(duel)
+
         sendDuelState(player, {
             type = "duel-intro",
             opponentKind = "monster",
@@ -1045,6 +1136,8 @@ local function onMonsterChallenged(player, monsterModel)
     local duel = {
         id = "npc-" .. tostring(duelSequence),
         player = player,
+        monsterModel = monsterModel,
+        monsterRoot = monsterRoot,
         monsterName = monsterModel.Name,
         monsterId = monsterId,
         monsterStars = 0,

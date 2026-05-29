@@ -1,196 +1,289 @@
-# Sistema De Captura Y Economia
+# Sistema Numerico De Economia, Energia y XP Beastibit
 
-Documento de diseño alineado a decisiones de producto actuales.
+Version: Balance Inicial V1  
+Estado: Propuesta jugable base
+
+## 1. Objetivos Del Sistema
+
+Este sistema busca:
+
+- Dar valor real a capturar Beastibit.
+- Evitar inflacion de progreso.
+- Hacer que cada duplicado tenga utilidad.
+- Mantener ritmo diario saludable.
+- Permitir progresion constante sin romper balance.
+- Separar claramente economia, captura y evolucion.
+
+## 2. Recursos Principales
+
+## 2.1 Bits
+
+Moneda principal del juego.
+
+Usos:
+
+- Evolucionar Beastibit.
+- Comprar items.
+- Expandir inventario.
+- Crafting futuro.
+- Reparaciones/eventos futuros.
+
+## 2.2 Capture Energy
+
+Energia usada para capturar Beastibit.
+
+Reglas:
+
+- Maximo diario: 100.
+- Regeneracion: +1 cada 12 minutos.
+- Recuperacion completa aproximada: 20 horas.
+
+Fuentes adicionales:
+
+- Login diario.
+- Eventos.
+- Pase.
+- Recompensas PvP.
+- Objetivos semanales.
+
+## 2.3 Minerales Planetarios
+
+Materiales usados para evolucion.
+
+Ejemplos:
+
+- Cristal Magma.
+- Core Plasma.
+- Raiz Lunar.
+- Void Shard.
+- Neon Crystal.
 
 Objetivo:
-- Definir captura, drops y progreso de Beastibit sin fusion como sistema principal.
-- Definir el rol de duplicados como comida para subir niveles.
-- Definir estrellas PvP solo como prestigio y ranking, sin bonus de combate.
 
-## 1. Decisiones Congeladas
+- Dar identidad a cada planeta.
+- Obligar exploracion repetida.
+- Crear farmeo especifico por zona.
 
-1. No usar fusion como mecanica principal de progreso.
-2. Estrellas PvP no dan stats: no aumentan ataque ni vida.
-3. Estrellas PvP solo suben o bajan en duelos PvP reales entre jugadores.
-4. Duplicados se usan como comida para subir nivel de Beastibit.
-5. Evolucion depende de nivel maximo de etapa + materiales minerales de planeta especifico.
-6. Moneda base del juego: Bits.
-7. Captura no es gratis: usar energia/recurso dedicado.
+## 3. Costos De Captura
 
-## 2. Sistema De Estrellas PvP
+## 3.1 Tabla Base
 
-## 2.1 Regla de ranking
+| Tipo | Energia | Bits |
+|---|---:|---:|
+| Comun | 5 | 50 |
+| Raro | 10 | 120 |
+| Epico | 16 | 260 |
+| Legendario | 24 | 500 |
 
-- Si el jugador gana PvP: +1 estrella.
-- Si el jugador pierde PvP: -1 estrella.
-- Minimo: 0 estrellas.
-- No hay bonus de stats por estrellas.
+## 3.2 Captura Garantizada
 
-## 2.2 Fantasia de prestigio
+No existe captura garantizada normalmente.
 
-- Ver jugadores con muchas estrellas debe comunicar experiencia real.
-- Meta social: cruzarte con alguien de 500+ estrellas debe sentirse "jugador pro".
+Excepciones:
 
-## 2.3 Titulos por estrellas
+- Tutorial.
+- Historia principal.
+- Eventos especiales.
 
-Las estrellas desbloquean solo cosmeticos de perfil:
-- Titulos visibles sobre nombre o en ficha del jugador.
-- Sin impacto de poder.
+## 3.3 Bonus De Primera Captura
 
-Propuesta de hitos:
-- 25: Aspirante
-- 100: Duelista
-- 250: Maestro de Arena
-- 500: Leyenda PvP
-- 1000: Emperador del BitCore
+Primera vez capturando especie:
 
-## 2.4 Protectores de estrella
+- +50 Bits.
+- +1 material aleatorio.
+- Registro en Bestiario.
 
-Sistema recomendado: Shield Charges.
+## 4. Sistema De XP Por Alimentacion
 
-- Cada carga evita perder 1 estrella en una derrota PvP.
-- Se consume 1 carga por derrota protegida.
-- No protege victorias ni da estrellas extra.
+## 4.1 Filosofia
 
-Regla economica:
-- No deben ser infinitos ni farmeables sin limite.
-- Si hay exceso de protectores, la ladder pierde valor.
+La progresion principal ocurre alimentando duplicados.
 
-Fuentes recomendadas:
-- Eventos.
-- Login rewards.
-- Ranked semanal.
-- Pase de temporada.
-- Tienda premium.
-- Crafting raro.
+Reglas:
 
-## 3. Captura De Beastibit
+- Todos los Beastibit sirven como comida.
+- Evoluciones mas altas valen mas.
+- Rarezas mas altas valen mas.
+- Niveles altos aportan bonus adicional.
 
-## 3.1 Moneda y energia
+## 5. XP Base Por Rareza
 
-- Moneda base: Bits.
-- Energia/recurso de captura: Bit Spheres o Capture Cores.
+| Rareza | XP Base |
+|---|---:|
+| Comun | 10 |
+| Raro | 25 |
+| Epico | 60 |
+| Legendario | 150 |
 
-## 3.2 Regla central
+## 6. Multiplicador Por Evolucion
 
-- No captura gratis como regla general.
-- Capturar consume recurso.
-- Casos de tutorial/historia pueden tener captura garantizada.
+| Evolucion | Multiplicador |
+|---|---:|
+| Evo 1 | x1.0 |
+| Evo 2 | x1.75 |
+| Evo 3 | x3.0 |
 
-## 3.3 Por que esta regla
+## 7. Multiplicador Por Nivel
 
-- Controla velocidad de coleccion.
-- Evita inflacion de Beastibit.
-- Da valor a los drops.
-- Fuerza decisiones interesantes del jugador.
+| Nivel | Multiplicador |
+|---|---:|
+| 1 - 5 | x0.8 |
+| 6 - 10 | x1.0 |
+| 11 - 15 | x1.25 |
+| 16 - 20 | x1.5 |
+| 21 - 30 | x1.8 |
+| 31 - 40 | x2.2 |
+| 41 - 60 | x3.0 |
 
-## 4. Drops De Encuentros
+## 8. Formula Final De XP
 
-## 4.1 Que dropea al terminar una pantalla
+Formula:
 
-- Bits.
-- Bit Spheres o Capture Cores.
-- Fragmentos minerales de planeta.
-- XP item ocasional.
-- Recompensa especial en elites o jefes.
+$$
+XP\ Final = XP\ Base\ Rareza \times Multiplicador\ Evolucion \times Multiplicador\ Nivel
+$$
 
-## 4.2 Chances base iniciales
+Regla de redondeo: hacia arriba.
 
-- Comun: 20% a 35% de recurso de captura.
-- Raro: 45% a 60%.
-- Elite: 70% a 85%.
-- Jefe: 100% de recurso importante o drop fijo especial.
+## 9. Ejemplos Reales
 
-## 5. Inventario Y Duplicados
+## 9.1 Comun Evo 1 Nivel 3
 
-## 5.1 Inventario
+Calculo: $10 \times 1.0 \times 0.8$
 
-- Espacio limitado con expansion progresiva.
-- Orden recomendado: favoritos, equipo activo, nuevos, duplicados, materiales.
-- Bloqueo de seguridad para favoritos y equipo activo.
+Resultado: 8 XP
 
-## 5.2 Duplicados
+## 9.2 Comun Evo 2 Nivel 15
 
-Uso principal:
-- Comida para subir nivel.
+Calculo: $10 \times 1.75 \times 1.25$
 
-Usos secundarios opcionales:
-- Venta por Bits.
-- Reciclaje por materiales.
+Resultado: 22 XP
 
-Regla:
-- Ningun duplicado debe sentirse basura.
+## 9.3 Raro Evo 2 Nivel 15
 
-## 6. Progresion De Beastibit
+Calculo: $25 \times 1.75 \times 1.25$
 
-## 6.1 Estructura de evolucion y nivel
+Resultado: 55 XP
 
-Ejemplo final recomendado:
-- Evo 1: niveles 1 a 20.
-- Evo 2: niveles 21 a 40.
-- Evo 3: niveles 41 a 60.
+## 9.4 Epico Evo 3 Nivel 40
 
-## 6.2 Como sube de nivel
+Calculo: $60 \times 3.0 \times 2.2$
 
-- Principalmente comiendo Beastibit duplicados.
-- Opcionalmente con items de XP raros.
+Resultado: 396 XP
 
-## 6.3 Como evoluciona
+## 9.5 Legendario Evo 3 Nivel 60
 
-Condiciones:
-- Alcanzar nivel maximo de la evo actual.
+Calculo: $150 \times 3.0 \times 3.0$
+
+Resultado: 1350 XP
+
+## 10. Costos De Nivel
+
+## 10.1 XP Requerida Por Nivel
+
+Evo 1
+
+| Nivel | XP Total |
+|---|---:|
+| 1 | 0 |
+| 5 | 40 |
+| 10 | 120 |
+| 15 | 260 |
+| 20 | 500 |
+
+Evo 2
+
+| Nivel | XP Total |
+|---|---:|
+| 21 | 650 |
+| 25 | 950 |
+| 30 | 1450 |
+| 35 | 2200 |
+| 40 | 3200 |
+
+Evo 3
+
+| Nivel | XP Total |
+|---|---:|
+| 41 | 3800 |
+| 45 | 5000 |
+| 50 | 6800 |
+| 55 | 9200 |
+| 60 | 12000 |
+
+## 11. Evolucion Beastibit
+
+## 11.1 Requisitos
+
+Para evolucionar:
+
+- Alcanzar nivel maximo de etapa.
 - Pagar Bits.
-- Entregar fragmentos minerales del planeta especifico.
+- Entregar minerales planetarios.
 
-Ejemplo:
-- Phantombit evo 1 nivel 5.
-- Se alimenta con comunes hasta nivel 20.
-- Luego evoluciona usando minerales del planeta objetivo.
+## 11.2 Costos De Evolucion
 
-## 6.4 Valor de planeta
+Evo 1 -> Evo 2
 
-Los planetas deben tener minerales unicos para evolucionar:
-- Cristal Magma.
-- Raiz Lunar.
-- Core Plasma.
+| Recurso | Cantidad |
+|---|---:|
+| Bits | 500 |
+| Mineral planeta | 10 |
 
-Resultado:
-- El jugador vuelve a explorar planetas.
-- El mundo gana identidad y valor de farmeo.
+Evo 2 -> Evo 3
 
-## 7. Tabla Base De XP Por Rareza
+| Recurso | Cantidad |
+|---|---:|
+| Bits | 2500 |
+| Mineral planeta | 30 |
 
-Regla de balance:
-- Los comunes deben dar poca XP para no romper la progresion.
+## 12. Valor De Duplicados
 
-Tabla inicial:
-- Comun: XP baja.
-- Raro: XP media.
-- Epico: XP alta.
-- Legendario: XP muy alta.
+Los duplicados nunca deben sentirse basura.
 
-## 8. Anti Frustracion
+Usos:
 
-- Pity de captura por racha de fallos.
-- Primera captura de tutorial garantizada.
-- Recompensa util incluso en derrota o intento fallido.
-- Confirmacion fuerte para acciones irreversibles (alimentar/sacrificar).
+- XP.
+- Venta.
+- Reciclaje.
+- Crafting.
+- Misiones futuras.
 
-## 9. Lo Que Queda Pendiente
+## 13. Sistema Anti Frustracion
 
-- Elegir nombre final entre Bit Spheres y Capture Cores.
-- Definir costos exactos de captura por tipo de Beastibit.
-- Definir costos exactos de evolucion por planeta.
-- Definir tabla numerica de XP por rareza y nivel.
-- Definir capacidad inicial de inventario y precio de expansiones.
-- Definir limites de obtencion de Shield Charges por semana.
+## 13.1 Pity De Captura
 
-## 10. Siguiente Paso Recomendado
+Cada captura fallida:
 
-Cerrar en este orden:
+- +5% chance acumulativa temporal.
 
-1. Tabla numerica de drops por tipo de encuentro.
-2. Costos de captura por rareza.
-3. Tabla de XP por rareza para comida.
-4. Costos de evolucion por planeta.
-5. Hitos de titulos por estrellas PvP.
+Reset:
+
+- Al capturar exitosamente.
+
+## 13.2 Proteccion De Favoritos
+
+No se puede alimentar:
+
+- Favoritos.
+- Equipo activo.
+- Beastibit historia/evento.
+
+Sin confirmacion manual.
+
+## 14. Economia Recomendada
+
+Ritmo diario esperado.
+
+Jugador casual:
+
+- 8 a 15 capturas diarias.
+- 1 evolucion cada varios dias.
+- Progreso visible todos los dias.
+
+Jugador hardcore:
+
+- Farm de minerales.
+- Optimizar XP.
+- Buscar Beastibit raros.
+- PvP competitivo.

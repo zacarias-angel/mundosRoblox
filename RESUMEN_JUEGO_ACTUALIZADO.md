@@ -1,6 +1,6 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-05-28
+Fecha de actualizacion: 2026-05-29
 
 Terminologia oficial:
 
@@ -106,6 +106,8 @@ Estado: FUNCIONAL Y PULIDO BASE
 - HUD de vida propio y rival.
 - Estados visuales de countdown/inicio/fin de duelo.
 - Layout tactil para movil.
+- Ajustes finos de layout movil (HUD/board) y escalado visual de piezas temporales (drag + cascadas) en progreso.
+- Mensaje flotante de ataque NPC removido para mejorar lectura del tablero en combate.
 
 ## 3.5 UI de Mochila y Formacion (separada de CombatUI)
 
@@ -153,6 +155,13 @@ Funcionalidad actual:
   - Victoria PvP por hp-depleted: +1 estrella.
   - Derrota PvP por hp-depleted: -1 estrella (con minimo 0).
 - Integrado en CombatServer.endDuel para que aplique solo en PvP real.
+- Sin impacto en poder de combate: las estrellas NO aumentan ataque, vida ni stats.
+
+Direccion de diseno confirmada:
+
+- Las estrellas funcionan como prestigio/ranking social.
+- Se planea desbloqueo de titulos por hitos de estrellas.
+- Se planea sistema de protectores de estrella por cargas limitadas (no infinitos).
 
 Visual del contador:
 
@@ -202,6 +211,9 @@ Nota de estado:
 12. Separacion companion/salvaje para evitar prompts de desafio en Beastibit seguidores.
 13. Ajuste de follow para gravedad planetaria usando ejes locales del personaje.
 14. Configuracion de follow por especie en MonstersData (CompanionFollow).
+15. Ajuste de CombatUI para movil: reubicacion/escala del tablero y HUD para mejorar lectura en horizontal.
+16. Correccion de escala en piezas temporales de drag/cascada para que coincidan con el tablero reducido en movil.
+17. Eliminacion del texto flotante de ataque NPC en HUD para reducir ruido visual durante duelo.
 
 ## 7. Lo Que Falta O Requiere Pulido
 
@@ -221,6 +233,16 @@ Nota de estado:
 - Afinar posicion exacta final del contador en todos los rigs (R6/R15, escalas distintas).
 - Preparar capa VFX de estrellas (particulas, glow, feedback al subir/bajar).
 - Considerar anti-spam y protecciones de write para DataStore a gran escala.
+- Definir tabla final de titulos por hitos de estrellas.
+- Definir fuentes y limites de Shield Charges para no congelar la ladder.
+
+## 7.7 Economia de captura y progresion Beastibit (nuevo foco)
+
+- Cerrar nombre final del recurso de captura (Bit Spheres o Capture Cores).
+- Cerrar tabla numerica de drops por tipo de encuentro (comun/raro/elite/jefe).
+- Cerrar tabla de XP por rareza para comida con duplicados.
+- Cerrar costos de evolucion por planeta (minerales especificos + Bits).
+- Confirmar protecciones de seguridad para Beastibit favoritos/equipo/historia en alimentacion.
 
 ## 7.3 Gravedad planetaria
 

@@ -676,6 +676,9 @@ gridFrame.Parent = container
 
 local cellButtons = {}
 local normalizePointerPosition
+local shouldUseCompactCombatLayout
+local getBoardScaleFactor
+local getScaledCellSize
 
 local function buildCells()
     -- Propósito: Construir la grilla visual completa del tablero.
@@ -758,9 +761,11 @@ local function showGhost(col, row, mousePos)
     end
     ghostFrame.BackgroundColor3 = ELEMENT_COLORS[tile.elementType] or Color3.fromRGB(80, 80, 80)
     ghostLabel.Text = ELEMENT_LABELS[tile.elementType] or "?"
+    local cellSize = getScaledCellSize()
+    ghostFrame.Size = UDim2.new(0, cellSize, 0, cellSize)
     local normalizedPos = normalizePointerPosition(mousePos)
     -- Pegar el ghost al cursor (ajuste por AnchorPoint centrado)
-    ghostFrame.Position = UDim2.new(0, normalizedPos.X, 0, (normalizedPos.Y + CELL_SIZE))
+    ghostFrame.Position = UDim2.new(0, normalizedPos.X, 0, (normalizedPos.Y + math.floor(cellSize * 0.82)))
     ghostFrame.Visible = true
 end
 
@@ -1186,25 +1191,133 @@ containerScale.Name = "MobileScale"
 containerScale.Scale = 1
 containerScale.Parent = container
 
+shouldUseCompactCombatLayout = function()
+    -- Propósito: Decidir si se aplica layout compacto (móvil/emulador).
+    -- Precondiciones: Ninguna.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: boolean
+    if UserInputService.TouchEnabled then
+        return true
+    end
+
+    local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+    return viewport.X <= 980 or viewport.Y <= 560
+end
+
+getBoardScaleFactor = function()
+    -- Propósito: Obtener el factor de escala visual actual del tablero.
+    -- Precondiciones: Ninguna.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: number
+    if shouldUseCompactCombatLayout() then
+        return math.max(containerScale.Scale, 0.1)
+    end
+    return 1
+end
+
+getScaledCellSize = function()
+    -- Propósito: Calcular el tamaño real en píxeles de una ficha en pantalla.
+    -- Precondiciones: Ninguna.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: number
+    return CELL_SIZE * getBoardScaleFactor()
+end
+
 local function applyTouchLayout()
     -- Propósito: Ajustar layout táctil para no bloquear joystick en móvil.
     -- Precondiciones: Ninguna.
     -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
     -- Retorna: nil
-    if not IS_TOUCH_DEVICE then
+    if not shouldUseCompactCombatLayout() then
+        containerScale.Scale = 1
+        container.AnchorPoint = Vector2.new(0.5, 1)
+        container.Position = UDim2.new(0.5, 0, 1, -20)
+
+        topHud.Position = UDim2.new(0.5, 0, 0, 20)
+        topHud.Size = UDim2.new(0, 540, 0, 80)
+
+        selfHPLabel.Size = UDim2.new(0, 260, 0, 20)
+        selfHPLabel.TextSize = 16
+        selfHPBarBg.Position = UDim2.new(0, 0, 0, 24)
+        selfHPBarBg.Size = UDim2.new(0, 260, 0, 14)
+
+        enemyHPLabel.Position = UDim2.new(0, 280, 0, 0)
+        enemyHPLabel.Size = UDim2.new(0, 260, 0, 20)
+        enemyHPLabel.TextSize = 16
+        enemyHPBarBg.Position = UDim2.new(0, 280, 0, 24)
+        enemyHPBarBg.Size = UDim2.new(0, 260, 0, 14)
+
+        enemyAvatarFrame.Size = UDim2.new(0, 78, 0, 78)
+        enemyAvatarLabel.TextSize = 12
+
+        duelStatusLabel.TextSize = 18
+        duelStatusLabel.Position = UDim2.new(0.5, 0, 0, 110)
+        challengePrompt.Position = UDim2.new(0.5, 0, 0.55, 0)
+        challengePrompt.Size = UDim2.new(0, 420, 0, 120)
         return
     end
 
     local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(720, 1280)
+    local insetTopLeft, insetBottomRight = GuiService:GetGuiInset()
+    local safeTop = insetTopLeft.Y + 8
+    local safeBottom = insetBottomRight.Y + 8
+    local isLandscape = viewport.X >= viewport.Y
+
     local baseWidth = COLS * stepCellSize + 8
-    containerScale.Scale = math.clamp((viewport.X - 24) / baseWidth, 0.7, 1)
+    local baseHeight = ROWS * stepCellSize + 40
+    local availableWidth = math.max(viewport.X - 24, 220)
+    local availableHeight = math.max(viewport.Y - safeTop - safeBottom - 140, 220)
+
+    local scaleByWidth = availableWidth / baseWidth
+    local scaleByHeight = availableHeight / baseHeight
+
+    if isLandscape then
+        containerScale.Scale = math.clamp(math.min(scaleByWidth, scaleByHeight) * 1.20, 0.74, 1.0)
+    else
+        containerScale.Scale = math.clamp(math.min(scaleByWidth, scaleByHeight) * 1.20, 0.76, 1.0)
+    end
 
     container.AnchorPoint = Vector2.new(0.5, 0.5)
-    container.Position = UDim2.new(0.5, 0, 0.48, 0)
+    if isLandscape then
+        container.Position = UDim2.new(0.74, 0, 0.64, 0)
+    else
+        container.Position = UDim2.new(0.5, 0, 0.58, -math.floor(safeBottom * 0.10))
+    end
 
-    topHud.Position = UDim2.new(0.5, 0, 0, 10)
-    duelStatusLabel.Position = UDim2.new(0.5, 0, 0, 94)
-    challengePrompt.Position = UDim2.new(0.5, 0, 0.43, 0)
+    local hudWidth
+    if isLandscape then
+        hudWidth = math.clamp(math.floor(viewport.X * 0.50), 340, 620)
+    else
+        hudWidth = math.clamp(viewport.X - 24, 300, 560)
+    end
+    local hudSectionWidth = math.floor((hudWidth - 20) * 0.5)
+
+    topHud.Position = UDim2.new(isLandscape and 0.64 or 0.5, 0, 0, 14)
+    topHud.Size = UDim2.new(0, hudWidth, 0, isLandscape and 52 or 72)
+
+    selfHPLabel.Size = UDim2.new(0, hudSectionWidth, 0, 18)
+    selfHPLabel.TextSize = isLandscape and 11 or 16
+    selfHPBarBg.Position = UDim2.new(0, 0, 0, isLandscape and 19 or 24)
+    selfHPBarBg.Size = UDim2.new(0, hudSectionWidth, 0, isLandscape and 10 or 12)
+
+    enemyHPLabel.Position = UDim2.new(0, hudSectionWidth + 20, 0, 0)
+    enemyHPLabel.Size = UDim2.new(0, hudSectionWidth, 0, 18)
+    enemyHPLabel.TextSize = isLandscape and 11 or 16
+    enemyHPBarBg.Position = UDim2.new(0, hudSectionWidth + 20, 0, isLandscape and 19 or 24)
+    enemyHPBarBg.Size = UDim2.new(0, hudSectionWidth, 0, isLandscape and 10 or 12)
+
+    enemyAvatarFrame.Size = UDim2.new(0, isLandscape and 58 or 70, 0, isLandscape and 58 or 70)
+    enemyAvatarLabel.TextSize = isLandscape and 10 or 12
+    enemyAvatarFrame.Position = UDim2.new(1, -10, 0, 12)
+
+    duelStatusLabel.TextSize = isLandscape and 14 or 18
+    duelStatusLabel.Position = UDim2.new(0.5, 0, 0, isLandscape and 62 or 86)
+    challengePrompt.Size = UDim2.new(0, math.clamp(viewport.X - 32, 280, 420), 0, 120)
+    if isLandscape then
+        challengePrompt.Position = UDim2.new(0.69, 0, 0.54, 0)
+    else
+        challengePrompt.Position = UDim2.new(0.5, 0, 0.48, 0)
+    end
 end
 
 local function setChallengePromptsEnabled(enabled)
@@ -1363,7 +1476,7 @@ task.delay(3, function()
 end)
 
 
-if IS_TOUCH_DEVICE and workspace.CurrentCamera then
+if workspace.CurrentCamera then
     workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
         applyTouchLayout()
     end)
@@ -1542,7 +1655,8 @@ local function createFloatingTile(elementType, centerPos)
     local ghost = Instance.new("Frame")
     ghost.Name = "CascadeGhost"
     ghost.AnchorPoint = Vector2.new(0.5, 0.5)
-    ghost.Size = UDim2.new(0, CELL_SIZE, 0, CELL_SIZE)
+    local cellSize = getScaledCellSize()
+    ghost.Size = UDim2.new(0, cellSize, 0, cellSize)
     ghost.Position = UDim2.new(0, centerPos.X, 0, centerPos.Y)
     ghost.BackgroundColor3 = ELEMENT_COLORS[elementType] or Color3.fromRGB(80, 80, 80)
     ghost.BorderSizePixel = 0
@@ -1778,6 +1892,9 @@ local function animateCascadeGravity(cascade)
     local tweenInfo = TweenInfo.new(FALL_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local tweens = {}
     local floatingTiles = {}
+    local cellSize = getScaledCellSize()
+    local halfCell = cellSize * 0.5
+    local scaledStep = stepCellSize * getBoardScaleFactor()
 
     for _, move in ipairs(movimientos) do
         local tile = oldGrid[move.fromCol] and oldGrid[move.fromCol][move.fromRow]
@@ -1786,12 +1903,12 @@ local function animateCascadeGravity(cascade)
         if tile and sourceBtn and targetBtn then
             local sourcePos = sourceBtn.AbsolutePosition
             local targetPos = targetBtn.AbsolutePosition
-            local floating = createFloatingTile(tile.elementType, Vector2.new(sourcePos.X + (CELL_SIZE * 0.5), sourcePos.Y + (CELL_SIZE * 0.5)))
+            local floating = createFloatingTile(tile.elementType, Vector2.new(sourcePos.X + halfCell, sourcePos.Y + halfCell))
             table.insert(floatingTiles, floating)
             table.insert(tweens, TweenService:Create(
                 floating,
                 tweenInfo,
-                { Position = UDim2.new(0, targetPos.X + (CELL_SIZE * 0.5), 0, targetPos.Y + (CELL_SIZE * 0.5)) }
+                { Position = UDim2.new(0, targetPos.X + halfCell, 0, targetPos.Y + halfCell) }
             ))
         end
     end
@@ -1800,14 +1917,14 @@ local function animateCascadeGravity(cascade)
         local targetBtn = cellButtons[newTile.col] and cellButtons[newTile.col][newTile.row]
         if targetBtn then
             local targetPos = targetBtn.AbsolutePosition
-            local spawnOffset = stepCellSize * (newTile.row + 1)
-            local startPos = Vector2.new(targetPos.X + (CELL_SIZE * 0.5), targetPos.Y + (CELL_SIZE * 0.5) - spawnOffset)
+            local spawnOffset = scaledStep * (newTile.row + 1)
+            local startPos = Vector2.new(targetPos.X + halfCell, targetPos.Y + halfCell - spawnOffset)
             local floating = createFloatingTile(newTile.elementType, startPos)
             table.insert(floatingTiles, floating)
             table.insert(tweens, TweenService:Create(
                 floating,
                 tweenInfo,
-                { Position = UDim2.new(0, targetPos.X + (CELL_SIZE * 0.5), 0, targetPos.Y + (CELL_SIZE * 0.5)) }
+                { Position = UDim2.new(0, targetPos.X + halfCell, 0, targetPos.Y + halfCell) }
             ))
         end
     end
@@ -1817,8 +1934,8 @@ local function animateCascadeGravity(cascade)
     local bounceInfo = TweenInfo.new(BOUNCE_DURATION, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out)
     local bounceTweens = {}
     for _, floating in ipairs(floatingTiles) do
-        table.insert(bounceTweens, TweenService:Create(floating, bounceInfo, { Size = UDim2.new(0, CELL_SIZE, 0, CELL_SIZE) }))
-        floating.Size = UDim2.new(0, CELL_SIZE * 1.15, 0, CELL_SIZE * 1.15)
+        table.insert(bounceTweens, TweenService:Create(floating, bounceInfo, { Size = UDim2.new(0, cellSize, 0, cellSize) }))
+        floating.Size = UDim2.new(0, cellSize * 1.15, 0, cellSize * 1.15)
     end
     for _, tween in ipairs(bounceTweens) do
         tween:Play()
@@ -2477,10 +2594,6 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
         updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
-        duelStatusLabel.Text = tostring(data.opponentName)
-            .. " ataco con " .. tostring(data.element)
-            .. " x" .. tostring(data.comboCount)
-            .. "  (-" .. tostring(data.damage) .. " hp)"
         return
     end
 

@@ -56,18 +56,18 @@ Pilares:
 
 - [ ] Definir que dropea al terminar una pantalla/encuentro.
 - [ ] Definir chance base de drop por tipo de enemigo/pantalla.
-- [ ] Definir si el Beastibit se captura directo o se convierte en recurso de captura.
+- [x] Definir si el Beastibit se captura directo o se convierte en recurso de captura. (Regla base: no captura gratis; usar recurso dedicado tipo Bit Spheres/Capture Cores, con excepciones de tutorial/historia)
 - [ ] Definir inventario de captura (espacio, limites, orden).
-- [ ] Definir reglas de duplicados (fusion, convertir, vender, comida).
+- [x] Definir reglas de duplicados (fusion, convertir, vender, comida). (Direccion confirmada: duplicados como comida/progreso; fusion deja de ser sistema principal)
 - [ ] Definir protecciones anti-frustracion (pity, garantias por racha).
 
 ## 2.5 Beastibit como comida/fusion
 
-- [ ] Definir cuales Beastibit pueden usarse como comida.
-- [ ] Definir si hay Beastibit protegidos que no pueden sacrificarse.
+- [x] Definir cuales Beastibit pueden usarse como comida. (Base: duplicados, comunes y repetidos)
+- [x] Definir si hay Beastibit protegidos que no pueden sacrificarse. (Base: favoritos, equipo activo, Beastibit de historia)
 - [ ] Definir valor de comida por rareza, nivel y evolucion.
 - [ ] Definir UI de confirmacion fuerte para evitar sacrificios accidentales.
-- [ ] Definir costo en recursos para fusionar/alimentar.
+- [ ] Definir costo en recursos para alimentar/evolucionar. (Sin fusion como sistema principal)
 - [ ] Definir limite diario/semanal si se necesita control economico.
 
 ## 2.6 Mundos, biomas y niveles
@@ -97,6 +97,9 @@ Pilares:
 - [ ] Definir recompensas por victoria/derrota ademas de estrellas.
 - [ ] Definir penalizaciones por abandono/desconexion.
 - [ ] Definir ranking por temporadas (si aplica).
+- [x] Definir rol de estrellas PvP en combate. (Solo prestigio/ranking social: +1 al ganar PvP, -1 al perder PvP, sin bonus de stats)
+- [ ] Definir hitos de titulos por estrellas PvP.
+- [ ] Definir fuentes y limites de Shield Charges (protectores de estrella por cargas limitadas).
 
 ## 2.9 Poderes y VFX
 
@@ -258,6 +261,11 @@ Sprint siguiente recomendado:
 - [x] Decision 008: baseline IA de combate NPC v1 (sesgo elemental, fases de HP, especial con cooldown y anti-rachas).
 - [x] Decision 009: companion follow configurado por especie en MonstersData (CompanionFollow) en lugar de atributos por modelo.
 - [x] Decision 010: follow de companion adaptado a gravedad planetaria usando UpVector local.
+- [x] Decision 011: estrellas PvP son prestigio social, sin impacto de poder (ataque/vida/stats).
+- [x] Decision 012: captura base sin modo gratis; usar recurso dedicado de captura (nombre final pendiente).
+- [x] Decision 013: duplicados se priorizan como comida para progresion de Beastibit.
+- [x] Decision 014: fusion deja de ser sistema principal; progresion por niveles + evolucion con materiales planetarios.
+- [x] Decision 015: protector de estrella sera por cargas limitadas (Shield Charges), no proteccion infinita.
 
 ## 6. Riesgos que hay que controlar
 

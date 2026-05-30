@@ -105,6 +105,7 @@ Pilares:
 
 - [ ] Definir lista de poderes por elemento.
 - [ ] Definir timing de VFX por evento (inicio ataque, impacto, critico, KO).
+- [x] Definir baseline tecnico de feedback PvE inmediato. (Proyectil unico del salvaje por ataque + shake de camara corto al impacto)
 - [ ] Definir capas de feedback (VFX, SFX, texto dano, shake, UI).
 - [ ] Definir niveles de calidad grafica (bajo/medio/alto).
 - [ ] Definir version de VFX MVP (simple) y version avanzada (post-MVP).
@@ -266,6 +267,11 @@ Sprint siguiente recomendado:
 - [x] Decision 013: duplicados se priorizan como comida para progresion de Beastibit.
 - [x] Decision 014: fusion deja de ser sistema principal; progresion por niveles + evolucion con materiales planetarios.
 - [x] Decision 015: protector de estrella sera por cargas limitadas (Shield Charges), no proteccion infinita.
+- [x] Decision 016: PvE salvaje usa unidad unica (x1), no equipo NPC simulado x5.
+- [x] Decision 017: formula PvE salvaje confirmada: HP base x3.5 y daño base x combo x2.5.
+- [x] Decision 018: si el elemento elegido por IA no coincide con el elemento real del salvaje, ataque = miss (0 daño).
+- [x] Decision 019: VFX PvE de ataque salvaje usa 1 proyectil por ataque, sin escalar cantidad por combo.
+- [x] Decision 020: camera shake corto en cliente al impacto del salvaje como feedback visual.
 
 ## 6. Riesgos que hay que controlar
 

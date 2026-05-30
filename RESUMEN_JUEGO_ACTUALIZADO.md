@@ -1,6 +1,6 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-05-29
+Fecha de actualizacion: 2026-05-30
 
 Terminologia oficial:
 
@@ -69,7 +69,11 @@ Estado: FUNCIONAL
 
 - MonsterPromptSetup crea prompts en modelos marcados como monstruo.
 - CombatServer detecta trigger del prompt y arranca duelo NPC.
-- El NPC tiene equipo simulado de Beastibit (x5) y ataques periodicos con IA v1 equilibrada.
+- El NPC usa Beastibit salvaje de unidad unica (x1) para PvE.
+- Vida del salvaje en PvE: HP base x3.5.
+- Daño del salvaje en PvE: Attack base x combo x2.5.
+- Si el elemento elegido por IA no coincide con el elemento real del salvaje, el ataque es miss (0 daño).
+- El proyectil del salvaje se emite como 1 disparo por ataque (no rafaga por combo).
 - El cliente recibe eventos de ataque NPC y actualiza HUD.
 
 Detalles IA NPC v1 (combate):
@@ -108,6 +112,7 @@ Estado: FUNCIONAL Y PULIDO BASE
 - Layout tactil para movil.
 - Ajustes finos de layout movil (HUD/board) y escalado visual de piezas temporales (drag + cascadas) en progreso.
 - Mensaje flotante de ataque NPC removido para mejorar lectura del tablero en combate.
+- Sacudida breve de camara en impacto de Beastibit salvaje (solo efecto visual local).
 
 ## 3.5 UI de Mochila y Formacion (separada de CombatUI)
 
@@ -214,6 +219,11 @@ Nota de estado:
 15. Ajuste de CombatUI para movil: reubicacion/escala del tablero y HUD para mejorar lectura en horizontal.
 16. Correccion de escala en piezas temporales de drag/cascada para que coincidan con el tablero reducido en movil.
 17. Eliminacion del texto flotante de ataque NPC en HUD para reducir ruido visual durante duelo.
+18. PvE rebalanceado a salvaje unidad unica (x1) en lugar de equipo simulado x5.
+19. Multiplicadores PvE aplicados al salvaje: HP x3.5 y daño por ataque x2.5 * combo.
+20. Regla de miss elemental en IA NPC: elemento no correspondiente aplica 0 daño.
+21. Ajuste de VFX NPC: 1 proyectil por ataque del salvaje (aunque combo sea alto).
+22. Integracion de camera shake corto al impacto del salvaje en cliente.
 
 ## 7. Lo Que Falta O Requiere Pulido
 

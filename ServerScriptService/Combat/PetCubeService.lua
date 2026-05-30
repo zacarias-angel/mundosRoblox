@@ -460,6 +460,7 @@ local function startFollowerTracking(player, followerState, hrp, character)
         end
 
         local goalPosition = computeFollowerGoalPosition(hrp, raycastParams, followerState)
+
         local currentPosition = getFollowerPosition(followerState)
         local toGoal = goalPosition - currentPosition
         local distanceToGoal = toGoal.Magnitude
@@ -677,7 +678,7 @@ function PetCubeService.spawnPlayerTeamDuelLine(player, team, enemyPosition)
 
     local lineCount = math.max(1, #team)
     local centerIndex = (lineCount + 1) * 0.5
-    local frontDistance = 6
+    local frontDistance = 4
     local sideSpacing = 3
 
     for index, pet in ipairs(team) do

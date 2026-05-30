@@ -36,6 +36,12 @@ local CombatChallengeRequest = RemoteEvents:WaitForChild("CombatChallengeRequest
 local CombatChallengeResponse = RemoteEvents:WaitForChild("CombatChallengeResponse")
 local CombatDuelState = RemoteEvents:WaitForChild("CombatDuelState")
 local CombatRosterAction = RemoteEvents:WaitForChild("CombatRosterAction")
+local CombatProjectileVfx = RemoteEvents:FindFirstChild("CombatProjectileVfx")
+if not CombatProjectileVfx then
+    CombatProjectileVfx = Instance.new("RemoteEvent")
+    CombatProjectileVfx.Name = "CombatProjectileVfx"
+    CombatProjectileVfx.Parent = RemoteEvents
+end
 
 local COLS, ROWS = CombatGrid.getSize()
 local DAMAGE_PER_CELL = 10
@@ -64,9 +70,187 @@ local duelSequence = 0
 local ELEMENTS_LIST = { "Fuego", "Agua", "Planta", "Electricidad", "Roca" }
 local MONSTER_CHALLENGE_DISTANCE = 15
 local MONSTER_AI_ATTACK_INTERVAL = 4
-local MONSTER_TEAM_SIZE = 5
-local DUEL_PLAYER_DISTANCE = 28
-local MONSTER_DUEL_PLAYER_DISTANCE = 22
+local MONSTER_TEAM_SIZE = 1
+local MONSTER_UNIT_ATTACK_MULTIPLIER = 2.5
+local MONSTER_UNIT_HP_MULTIPLIER = 3.5
+local DUEL_PLAYER_DISTANCE = 40
+local MONSTER_DUEL_PLAYER_DISTANCE = 34
+local DUEL_SIDE_SHIFT = 8
+local MONSTER_DUEL_SIDE_SHIFT = 8
+local GROUND_ALIGN_RAYCAST_HEIGHT = 40
+local GROUND_ALIGN_RAYCAST_DEPTH = 220
+local DEFAULT_HRP_GROUND_OFFSET = 3
+local PET_CUBES_WORLD_FOLDER = "PlayerPetCubes"
+local VFX_PROJECTILE_SIZE = Vector3.new(1, 1, 1)
+local VFX_PROJECTILE_TRAVEL_TIME = 0.35
+local VFX_SEQUENCE_STEP_TIME = 0.65
+local VFX_AFTER_UI_HIDE_DELAY = 1.1
+local dbg
+
+local ELEMENT_PROJECTILE_COLORS = {
+    Fuego = Color3.fromRGB(255, 120, 40),
+    Agua = Color3.fromRGB(70, 170, 255),
+    Planta = Color3.fromRGB(90, 220, 110),
+    Electricidad = Color3.fromRGB(255, 235, 80),
+    Roca = Color3.fromRGB(170, 145, 110),
+}
+
+local function getPlayerPetCubePart(player, slot)
+    -- Propósito: Obtener part visual del Beastibit por slot del jugador en duelo.
+    -- Precondiciones:
+    --   1. player debe ser Player válido.
+    --   2. slot debe ser number.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: BasePart|nil
+    local worldFolder = workspace:FindFirstChild(PET_CUBES_WORLD_FOLDER)
+    if not worldFolder then
+        return nil
+    end
+
+    local playerFolder = worldFolder:FindFirstChild(player.Name)
+    if not playerFolder then
+        return nil
+    end
+
+    local slotIndex = math.floor(tonumber(slot) or 0)
+    local cube = playerFolder:FindFirstChild("PetCube_" .. tostring(slotIndex))
+    if not cube and slotIndex >= 0 then
+        cube = playerFolder:FindFirstChild("PetCube_" .. tostring(slotIndex + 1))
+    end
+    if cube and cube:IsA("BasePart") then
+        return cube
+    end
+
+    return nil
+end
+
+local function getProjectileColorForElement(element)
+    -- Propósito: Resolver color del proyectil según elemento del Beastibit.
+    -- Precondiciones:
+    --   1. element puede ser string o nil.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: Color3
+    if type(element) == "string" and ELEMENT_PROJECTILE_COLORS[element] then
+        return ELEMENT_PROJECTILE_COLORS[element]
+    end
+    return Color3.fromRGB(255, 255, 255)
+end
+
+local function getPvpTargetPosition(opponent)
+    -- Propósito: Obtener posición destino en PvP para impactar Beastibit objetivo.
+    -- Precondiciones:
+    --   1. opponent debe ser Player válido.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: Vector3|nil
+    local targetCube = getPlayerPetCubePart(opponent, 1)
+    if targetCube then
+        return targetCube.Position
+    end
+
+    if not opponent or not opponent.Character then
+        return nil
+    end
+    local hrp = opponent.Character:FindFirstChild("HumanoidRootPart")
+    if hrp and hrp:IsA("BasePart") then
+        return hrp.Position
+    end
+    return nil
+end
+
+local function getPlayerTargetPosition(player)
+    -- Propósito: Obtener posición destino sobre el jugador para impactos visuales.
+    -- Precondiciones:
+    --   1. player debe ser Player válido.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: Vector3|nil
+    local targetCube = getPlayerPetCubePart(player, 1)
+    if targetCube then
+        return targetCube.Position
+    end
+
+    if not player or not player.Character then
+        return nil
+    end
+
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp and hrp:IsA("BasePart") then
+        return hrp.Position
+    end
+
+    return nil
+end
+
+local function spawnProjectileVfx(startPos, targetPos, element)
+    -- Propósito: Solicitar a clientes la reproducción local del proyectil para mayor suavidad.
+    -- Precondiciones:
+    --   1. startPos y targetPos deben ser Vector3.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if typeof(startPos) ~= "Vector3" or typeof(targetPos) ~= "Vector3" then
+        return
+    end
+
+    CombatProjectileVfx:FireAllClients({
+        startPos = startPos,
+        targetPos = targetPos,
+        element = element,
+        size = VFX_PROJECTILE_SIZE,
+        travelTime = VFX_PROJECTILE_TRAVEL_TIME,
+        color = getProjectileColorForElement(element),
+    })
+end
+
+local function playPlayerAttackVfxSequence(attacker, damageByPet, targetPositionResolver)
+    -- Propósito: Ejecutar secuencia de proyectiles por Beastibit atacante con daño > 0.
+    -- Precondiciones:
+    --   1. attacker debe ser Player válido.
+    --   2. damageByPet debe ser tabla.
+    --   3. targetPositionResolver debe ser función sin args que retorna Vector3|nil.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: nil
+    if not attacker or type(damageByPet) ~= "table" or type(targetPositionResolver) ~= "function" then
+        return
+    end
+
+    task.spawn(function()
+        local emittedCount = 0
+
+        for _, petDamage in ipairs(damageByPet) do
+            if type(petDamage) ~= "table" then
+                continue
+            end
+
+            local dealt = tonumber(petDamage.damage) or 0
+            if dealt <= 0 then
+                continue
+            end
+
+            local slot = tonumber(petDamage.slot) or 1
+            local sourceCube = getPlayerPetCubePart(attacker, slot)
+            local targetPos = targetPositionResolver()
+
+            if sourceCube and targetPos then
+                spawnProjectileVfx(sourceCube.Position, targetPos, petDamage.element)
+                emittedCount += 1
+            else
+                dbg(
+                    "VFX omitido: source="
+                    .. tostring(sourceCube ~= nil)
+                    .. " target="
+                    .. tostring(targetPos ~= nil)
+                    .. " slot="
+                    .. tostring(slot)
+                )
+            end
+
+            task.wait(VFX_SEQUENCE_STEP_TIME)
+        end
+
+        if emittedCount == 0 then
+            dbg("VFX secuencia sin emisiones para " .. attacker.Name)
+        end
+    end)
+end
 
 local function chooseWeightedElement(weights)
     -- Propósito: Elegir un elemento usando pesos acumulados para IA de monstruo.
@@ -211,7 +395,49 @@ local function buildMonsterAiAttack(duel)
     return element, comboCount, usedSpecial
 end
 
-local function dbg(message)
+local function calculateWildMonsterUnitDamage(monsterId, comboCount, chosenElement)
+    -- Propósito: Calcular daño de Beastibit salvaje como unidad única con multiplicador PvE.
+    -- Precondiciones:
+    --   1. monsterId debe existir en MonstersData.
+    --   2. comboCount debe ser number >= 0.
+    --   3. chosenElement debe ser string.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: number damage, boolean elementMatched, string monsterElement
+    local monsterData = MonstersData[monsterId]
+    local monsterElement = type(monsterData) == "table" and tostring(monsterData.Element or "Desconocido") or "Desconocido"
+    local elementMatched = (type(chosenElement) == "string" and chosenElement == monsterElement)
+    if not elementMatched then
+        return 0, false, monsterElement
+    end
+
+    local baseAttack = 0
+    if type(monsterData) == "table"
+        and type(monsterData.BaseStats) == "table"
+        and type(monsterData.BaseStats.Attack) == "number" then
+        baseAttack = monsterData.BaseStats.Attack
+    end
+
+    local combos = math.max(0, math.floor(tonumber(comboCount) or 0))
+    local damage = math.floor(baseAttack * combos * MONSTER_UNIT_ATTACK_MULTIPLIER)
+    return math.max(0, damage), true, monsterElement
+end
+
+local function calculateWildMonsterMaxHP(monsterId)
+    -- Propósito: Calcular vida máxima del Beastibit salvaje con multiplicador PvE.
+    -- Precondiciones:
+    --   1. monsterId debe existir en MonstersData.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: number
+    local monsterData = MonstersData[monsterId]
+    if type(monsterData) ~= "table" or type(monsterData.BaseStats) ~= "table" then
+        return 0
+    end
+
+    local baseHP = tonumber(monsterData.BaseStats.HP) or 0
+    return math.max(0, math.floor(baseHP * MONSTER_UNIT_HP_MULTIPLIER))
+end
+
+dbg = function(message)
     -- Propósito: Emitir logs de depuración del servidor de combate.
     -- Precondiciones:
     --   1. message debe ser string.
@@ -266,6 +492,63 @@ local function getPlayersDistance(playerA, playerB)
     return (posA - posB).Magnitude
 end
 
+local function getGroundYAt(position, ignoreInstances)
+    -- Propósito: Obtener altura de suelo en una posición usando raycast vertical.
+    -- Precondiciones:
+    --   1. position debe ser Vector3.
+    --   2. ignoreInstances puede ser tabla de Instancias.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: number|nil
+    if typeof(position) ~= "Vector3" then
+        return nil
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    local filteredIgnore = {}
+    if type(ignoreInstances) == "table" then
+        for _, inst in ipairs(ignoreInstances) do
+            if typeof(inst) == "Instance" then
+                table.insert(filteredIgnore, inst)
+            end
+        end
+    end
+    params.FilterDescendantsInstances = filteredIgnore
+
+    local origin = Vector3.new(position.X, position.Y + GROUND_ALIGN_RAYCAST_HEIGHT, position.Z)
+    local result = workspace:Raycast(origin, Vector3.new(0, -GROUND_ALIGN_RAYCAST_DEPTH, 0), params)
+    if not result then
+        return nil
+    end
+    return result.Position.Y
+end
+
+local function alignTargetToGround(hrp, targetPos, ignoreInstances)
+    -- Propósito: Ajustar Y de una posición objetivo para evitar hundir al jugador en el terreno.
+    -- Precondiciones:
+    --   1. hrp debe ser BasePart válida.
+    --   2. targetPos debe ser Vector3.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: Vector3
+    if not hrp or not hrp:IsA("BasePart") or typeof(targetPos) ~= "Vector3" then
+        return targetPos
+    end
+
+    local currentGroundY = getGroundYAt(hrp.Position, ignoreInstances)
+    local targetGroundY = getGroundYAt(targetPos, ignoreInstances)
+    if not targetGroundY then
+        return Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z)
+    end
+
+    local groundOffset = DEFAULT_HRP_GROUND_OFFSET
+    if type(currentGroundY) == "number" then
+        groundOffset = math.max(1.5, hrp.Position.Y - currentGroundY)
+    end
+
+    return Vector3.new(targetPos.X, targetGroundY + groundOffset, targetPos.Z)
+end
+
 local function getDuelOpponent(player)
     -- Propósito: Obtener oponente del duelo activo de un jugador.
     -- Precondiciones:
@@ -318,12 +601,14 @@ local function setupDuelParticipants(duel)
         walkSpeed = humA and humA.WalkSpeed or nil,
         jumpPower = humA and humA.JumpPower or nil,
         autoRotate = humA and humA.AutoRotate or nil,
+        platformStand = humA and humA.PlatformStand or nil,
     }
     duel.anchorStateByUserId[duel.playerB.UserId] = {
         wasAnchored = hrpB.Anchored,
         walkSpeed = humB and humB.WalkSpeed or nil,
         jumpPower = humB and humB.JumpPower or nil,
         autoRotate = humB and humB.AutoRotate or nil,
+        platformStand = humB and humB.PlatformStand or nil,
     }
 
     local center = (hrpA.Position + hrpB.Position) * 0.5
@@ -336,11 +621,21 @@ local function setupDuelParticipants(duel)
         dir = Vector3.new(0, 0, -1)
     end
     local forward = dir.Unit
+    local right = forward:Cross(Vector3.new(0, 1, 0))
+    if right.Magnitude < 1e-4 then
+        right = Vector3.new(1, 0, 0)
+    else
+        right = right.Unit
+    end
+    local sideShift = -right * DUEL_SIDE_SHIFT
 
     local posA = center - (forward * (DUEL_PLAYER_DISTANCE * 0.5))
     local posB = center + (forward * (DUEL_PLAYER_DISTANCE * 0.5))
-    posA = Vector3.new(posA.X, hrpA.Position.Y, posA.Z)
-    posB = Vector3.new(posB.X, hrpB.Position.Y, posB.Z)
+    posA += sideShift
+    posB += sideShift
+    local pvpIgnore = { charA, charB }
+    posA = alignTargetToGround(hrpA, posA, pvpIgnore)
+    posB = alignTargetToGround(hrpB, posB, pvpIgnore)
 
     hrpA.Anchored = true
     hrpB.Anchored = true
@@ -355,12 +650,14 @@ local function setupDuelParticipants(duel)
         humA.AutoRotate = false
         humA.WalkSpeed = 0
         humA.JumpPower = 0
+        humA.PlatformStand = true
     end
 
     if humB then
         humB.AutoRotate = false
         humB.WalkSpeed = 0
         humB.JumpPower = 0
+        humB.PlatformStand = true
     end
 
     local stateA = playerStates[duel.playerA]
@@ -402,6 +699,11 @@ local function restoreDuelParticipants(duel)
                 end
                 if type(previousState.autoRotate) == "boolean" then
                     humanoid.AutoRotate = previousState.autoRotate
+                end
+                if type(previousState.platformStand) == "boolean" then
+                    humanoid.PlatformStand = previousState.platformStand
+                else
+                    humanoid.PlatformStand = false
                 end
             end
 
@@ -829,11 +1131,55 @@ local function buildMonsterNpcTeam(monsterId, size)
     --   2. size debe ser number positivo.
     -- Ubicación: ServerScriptService/CombatServer
     -- Retorna: table
+    if type(monsterId) ~= "string" or monsterId == "" then
+        return {}
+    end
+    if MonstersData[monsterId] == nil then
+        return {}
+    end
+
+    local safeSize = math.max(1, math.floor(tonumber(size) or 1))
     local team = {}
-    for i = 1, size do
+    for i = 1, safeSize do
         table.insert(team, { MonsterId = monsterId })
     end
     return team
+end
+
+local function resolveMonsterId(rawMonsterId)
+    -- Propósito: Normalizar MonsterId de atributos/modelos para lookup robusto en MonstersData.
+    -- Precondiciones:
+    --   1. rawMonsterId puede ser string o nil.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: string|nil
+    if type(rawMonsterId) ~= "string" then
+        return nil
+    end
+
+    local trimmed = string.match(rawMonsterId, "^%s*(.-)%s*$")
+    if trimmed == "" then
+        return nil
+    end
+
+    if MonstersData[trimmed] ~= nil then
+        return trimmed
+    end
+
+    local compact = string.gsub(trimmed, "%s+", "")
+    if MonstersData[compact] ~= nil then
+        return compact
+    end
+
+    local loweredTrimmed = string.lower(trimmed)
+    local loweredCompact = string.lower(compact)
+    for knownMonsterId in pairs(MonstersData) do
+        local loweredKnown = string.lower(knownMonsterId)
+        if loweredKnown == loweredTrimmed or loweredKnown == loweredCompact then
+            return knownMonsterId
+        end
+    end
+
+    return trimmed
 end
 
 local function endMonsterDuel(player, reason, winner)
@@ -866,6 +1212,11 @@ local function endMonsterDuel(player, reason, winner)
                     end
                     if type(previousState.autoRotate) == "boolean" then
                         humanoid.AutoRotate = previousState.autoRotate
+                    end
+                    if type(previousState.platformStand) == "boolean" then
+                        humanoid.PlatformStand = previousState.platformStand
+                    else
+                        humanoid.PlatformStand = false
                     end
                 end
 
@@ -937,7 +1288,17 @@ local function setupMonsterDuelParticipant(duel)
         walkSpeed = humanoid and humanoid.WalkSpeed or nil,
         jumpPower = humanoid and humanoid.JumpPower or nil,
         autoRotate = humanoid and humanoid.AutoRotate or nil,
+        platformStand = humanoid and humanoid.PlatformStand or nil,
     }
+
+    local right = forward:Cross(Vector3.new(0, 1, 0))
+    if right.Magnitude < 1e-4 then
+        right = Vector3.new(1, 0, 0)
+    else
+        right = right.Unit
+    end
+    targetPos += (-right * MONSTER_DUEL_SIDE_SHIFT)
+    targetPos = alignTargetToGround(hrp, targetPos, { character, duel.monsterModel })
 
     hrp.Anchored = true
     hrp.AssemblyLinearVelocity = Vector3.zero
@@ -948,6 +1309,7 @@ local function setupMonsterDuelParticipant(duel)
         humanoid.AutoRotate = false
         humanoid.WalkSpeed = 0
         humanoid.JumpPower = 0
+        humanoid.PlatformStand = true
     end
 
     local participantState = playerStates[player]
@@ -971,13 +1333,32 @@ local function startMonsterAI(player, duel)
 
             local element, comboCount, usedSpecial = buildMonsterAiAttack(duel)
 
-            local monsterComboSummary = {
-                totalCombos = comboCount,
-                activatedElements = { [element] = true },
-            }
+            local damage, elementMatched, monsterElement = calculateWildMonsterUnitDamage(duel.monsterId, comboCount, element)
 
-            local attackResult = MonsterCombat.calculateTeamDamage(duel.monsterTeam, monsterComboSummary)
-            local damage = attackResult.totalDamage
+            local targetPos = getPlayerTargetPosition(player)
+            if duel.monsterRoot and duel.monsterRoot:IsA("BasePart") and targetPos and elementMatched then
+                local monsterSourcePos = duel.monsterRoot.Position
+                task.spawn(function()
+                    if activeMonsterDuels[player] ~= duel or not duel.started then
+                        return
+                    end
+                    spawnProjectileVfx(monsterSourcePos, targetPos, element)
+                end)
+            elseif not elementMatched then
+                dbg(
+                    "NPC miss: elemento elegido="
+                    .. tostring(element)
+                    .. " distinto a elemento real="
+                    .. tostring(monsterElement)
+                )
+            else
+                dbg(
+                    "VFX NPC omitido: source="
+                    .. tostring(duel.monsterRoot ~= nil)
+                    .. " target="
+                    .. tostring(targetPos ~= nil)
+                )
+            end
 
             duel.playerHP = math.max(0, duel.playerHP - damage)
 
@@ -988,7 +1369,7 @@ local function startMonsterAI(player, duel)
                 opponentMonsterId = duel.monsterId,
                 element = element,
                 comboCount = comboCount,
-                attackTag = usedSpecial and "special" or "basic",
+                attackTag = elementMatched and (usedSpecial and "special" or "basic") or "miss",
                 damage = damage,
                 selfHP = duel.playerHP,
                 enemyHP = duel.monsterHP,
@@ -1005,6 +1386,7 @@ local function startMonsterAI(player, duel)
                 .. " x"
                 .. comboCount
                 .. (usedSpecial and " [SPECIAL]" or "")
+                .. (not elementMatched and " [MISS]" or "")
                 .. " = "
                 .. damage
                 .. " | playerHP="
@@ -1112,7 +1494,8 @@ local function onMonsterChallenged(player, monsterModel)
     local state = playerStates[player]
     if not state then return end
 
-    local monsterId = monsterModel:GetAttribute("MonsterId") or monsterModel.Name
+    local rawMonsterId = monsterModel:GetAttribute("MonsterId") or monsterModel.Name
+    local monsterId = resolveMonsterId(rawMonsterId)
     local playerTeam = state.team or TeamManager.getOrCreateTeam(player)
     local monsterTeam = buildMonsterNpcTeam(monsterId, MONSTER_TEAM_SIZE)
 
@@ -1122,15 +1505,20 @@ local function onMonsterChallenged(player, monsterModel)
         return
     end
 
-    local isMonsterTeamValid = TeamManager.validateTeam(monsterTeam)
-    if not isMonsterTeamValid then
-        dbg("MonsterId no encontrado en MonstersData: " .. tostring(monsterId))
+    if type(monsterId) ~= "string" or monsterId == "" or MonstersData[monsterId] == nil or #monsterTeam <= 0 then
+        dbg(
+            "MonsterId no encontrado en MonstersData: "
+            .. tostring(monsterId)
+            .. " (raw="
+            .. tostring(rawMonsterId)
+            .. ")"
+        )
         sendDuelState(player, { type = "challenge-failed", reason = "monster-data-missing" })
         return
     end
 
     local playerHP = TeamManager.calculateTeamHP(playerTeam)
-    local monsterHP = TeamManager.calculateTeamHP(monsterTeam)
+    local monsterHP = calculateWildMonsterMaxHP(monsterId)
 
     duelSequence += 1
     local duel = {
@@ -1162,11 +1550,11 @@ local function onMonsterChallenged(player, monsterModel)
     state.duelActive = true
     state.duelStarted = false
 
-    dbg("desafio NPC aceptado: " .. player.Name .. " vs " .. monsterModel.Name .. " (5x " .. monsterId .. ")")
+    dbg("desafio NPC aceptado: " .. player.Name .. " vs " .. monsterModel.Name .. " (1x " .. monsterId .. ")")
 
     sendDuelState(player, {
         type = "challenge-sent",
-        targetName = monsterModel.Name .. " (x5)",
+        targetName = monsterModel.Name,
         opponentKind = "monster",
         hideMonsterPromptSeconds = COUNTDOWN_SECONDS + 1,
     })
@@ -1667,6 +2055,19 @@ local function onCombatSubmit(player, payload)
                 if activeMonsterDuels[player] ~= monsterDuel or not monsterDuel.started then
                     return
                 end
+
+                task.wait(VFX_AFTER_UI_HIDE_DELAY)
+                if activeMonsterDuels[player] ~= monsterDuel or not monsterDuel.started then
+                    return
+                end
+
+                playPlayerAttackVfxSequence(player, combatDamage.damageByPet, function()
+                    if activeMonsterDuels[player] ~= monsterDuel then
+                        return nil
+                    end
+                    return monsterDuel.monsterRoot and monsterDuel.monsterRoot.Position or nil
+                end)
+
                 local nextHP = math.max(0, math.floor(monsterDuel.monsterHP - combatDamage.totalDamage))
                 monsterDuel.monsterHP = nextHP
                 enemyHP = nextHP
@@ -1690,6 +2091,19 @@ local function onCombatSubmit(player, payload)
                 if activeDuels[player] ~= duel or activeDuels[opponent] ~= duel or not duel.started then
                     return
                 end
+
+                task.wait(VFX_AFTER_UI_HIDE_DELAY)
+                if activeDuels[player] ~= duel or activeDuels[opponent] ~= duel or not duel.started then
+                    return
+                end
+
+                playPlayerAttackVfxSequence(player, combatDamage.damageByPet, function()
+                    if activeDuels[player] ~= duel or activeDuels[opponent] ~= duel then
+                        return nil
+                    end
+                    return getPvpTargetPosition(opponent)
+                end)
+
                 local opponentCurrentHP = duel.hpByUserId[opponent.UserId] or 0
                 local nextHP = math.max(0, math.floor(opponentCurrentHP - combatDamage.totalDamage))
                 duel.hpByUserId[opponent.UserId] = nextHP

@@ -28,6 +28,7 @@ local CombatSync = RemoteEvents:WaitForChild("CombatSync")
 local CombatChallengeRequest = RemoteEvents:WaitForChild("CombatChallengeRequest")
 local CombatChallengeResponse = RemoteEvents:WaitForChild("CombatChallengeResponse")
 local CombatDuelState = RemoteEvents:WaitForChild("CombatDuelState")
+local CombatProjectileVfx = RemoteEvents:WaitForChild("CombatProjectileVfx")
 
 local COLS, ROWS = CombatGrid.getSize()
 local CELL_SIZE = 64
@@ -52,6 +53,8 @@ local DUEL_INTRO_CARD_HEIGHT = 160
 local DUEL_INTRO_SLIDE_TIME = 0.32
 local DUEL_INTRO_IMPACT_TIME = 0.08
 local DUEL_INTRO_HOLD_TIME = 0.5
+local MONSTER_HIT_CAMERA_SHAKE_DURATION = 0.22
+local MONSTER_HIT_CAMERA_SHAKE_INTENSITY = 0.18
 
 local ELEMENT_COLORS = {
     Fuego = Color3.fromRGB(220, 60, 40),
@@ -106,6 +109,51 @@ local pendingChallengerUserId = nil
 local challengePromptRefs = {}
 local setRosterVisible = function(_visible)
     -- Mochila desactivada temporalmente para estabilizar CombatUI.
+end
+
+local cameraShakeToken = 0
+local CAMERA_SHAKE_BIND_NAME = "CombatUI_CameraShake"
+
+local function playMonsterHitCameraShake(durationSeconds, intensity)
+    -- Propósito: Sacudir cámara local brevemente al recibir impacto del Beastibit salvaje.
+    -- Precondiciones:
+    --   1. durationSeconds e intensity deben ser números positivos.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    local duration = math.max(0.05, tonumber(durationSeconds) or MONSTER_HIT_CAMERA_SHAKE_DURATION)
+    local power = math.max(0, tonumber(intensity) or MONSTER_HIT_CAMERA_SHAKE_INTENSITY)
+    if power <= 0 then
+        return
+    end
+
+    cameraShakeToken += 1
+    local myToken = cameraShakeToken
+    local startedAt = os.clock()
+
+    RunService:UnbindFromRenderStep(CAMERA_SHAKE_BIND_NAME)
+    RunService:BindToRenderStep(CAMERA_SHAKE_BIND_NAME, Enum.RenderPriority.Camera.Value + 1, function()
+        if myToken ~= cameraShakeToken then
+            RunService:UnbindFromRenderStep(CAMERA_SHAKE_BIND_NAME)
+            return
+        end
+
+        local elapsed = os.clock() - startedAt
+        if elapsed >= duration then
+            RunService:UnbindFromRenderStep(CAMERA_SHAKE_BIND_NAME)
+            return
+        end
+
+        local camera = workspace.CurrentCamera
+        if not camera then
+            return
+        end
+
+        local remaining = 1 - math.clamp(elapsed / duration, 0, 1)
+        local currentPower = power * remaining
+        local offsetX = (math.random() * 6 - 1) * currentPower
+        local offsetY = (math.random() * 6 - 1) * currentPower
+        camera.CFrame = camera.CFrame * CFrame.new(offsetX, offsetY, 0)
+    end)
 end
 
 local function dbg(message)
@@ -1279,7 +1327,7 @@ local function applyTouchLayout()
 
     container.AnchorPoint = Vector2.new(0.5, 0.5)
     if isLandscape then
-        container.Position = UDim2.new(0.74, 0, 0.64, 0)
+        container.Position = UDim2.new(0.80, 0, 0.64, 0)
     else
         container.Position = UDim2.new(0.5, 0, 0.58, -math.floor(safeBottom * 0.10))
     end
@@ -1549,6 +1597,52 @@ local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind
 
     duelResultOverlay.Visible = true
 end
+
+local function playClientProjectileVfx(payload)
+    -- Propósito: Reproducir proyectil local para evitar tirones por replicación del servidor.
+    -- Precondiciones:
+    --   1. payload.startPos y payload.targetPos deben ser Vector3.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: nil
+    if type(payload) ~= "table" then
+        return
+    end
+
+    local startPos = payload.startPos
+    local targetPos = payload.targetPos
+    if typeof(startPos) ~= "Vector3" or typeof(targetPos) ~= "Vector3" then
+        return
+    end
+
+    local projectile = Instance.new("Part")
+    projectile.Name = "CombatPowerVfxClient"
+    projectile.Anchored = true
+    projectile.CanCollide = false
+    projectile.CanQuery = false
+    projectile.CanTouch = false
+    projectile.Massless = true
+    projectile.Size = typeof(payload.size) == "Vector3" and payload.size or Vector3.new(1, 1, 1)
+    projectile.Material = Enum.Material.Neon
+    projectile.Color = typeof(payload.color) == "Color3" and payload.color or Color3.fromRGB(255, 255, 255)
+    projectile.Transparency = 0.08
+    projectile.CFrame = CFrame.new(startPos)
+    projectile.Parent = workspace
+
+    local travelTime = math.max(0.05, tonumber(payload.travelTime) or 0.35)
+    local tween = TweenService:Create(
+        projectile,
+        TweenInfo.new(travelTime, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+        { CFrame = CFrame.new(targetPos) }
+    )
+
+    tween.Completed:Connect(function()
+        projectile:Destroy()
+    end)
+
+    tween:Play()
+end
+
+CombatProjectileVfx.OnClientEvent:Connect(playClientProjectileVfx)
 
 local function renderGrid()
     -- Propósito: Refrescar colores, labels y bordes de toda la grilla.
@@ -2011,6 +2105,15 @@ function normalizePointerPosition(pointerPos)
     return Vector2.new(pointerPos.X - insetTopLeft.X, pointerPos.Y - insetTopLeft.Y)
 end
 
+local function toInputVector2(pos)
+    -- Propósito: Convertir una posición de InputObject a Vector2 seguro para cálculos de arrastre.
+    -- Precondiciones:
+    --   1. pos debe tener X e Y numéricos.
+    -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
+    -- Retorna: Vector2
+    return Vector2.new(pos.X, pos.Y)
+end
+
 local function getCellFromMouse(mousePos)
     -- Propósito: Obtener celda por cálculo matemático dentro del GridFrame.
     -- Precondiciones:
@@ -2207,7 +2310,7 @@ function inputHandlers.handleCellTouchBegan(input, col, row)
     if not localGrid then
         return
     end
-    dragStartPos = input.Position
+    dragStartPos = toInputVector2(input.Position)
     dbg("TouchStart en fila " .. row .. " col " .. col)
     startTurn(col, row)
 end
@@ -2299,7 +2402,8 @@ function inputHandlers.handleTouchMoved(touch, gameProcessed)
         return
     end
 
-    showGhost(dragCurrentCell.col, dragCurrentCell.row, touch.Position)
+    local touchPos = toInputVector2(touch.Position)
+    showGhost(dragCurrentCell.col, dragCurrentCell.row, touchPos)
 
     local now = os.clock()
     if now - lastSwapTime < SWAP_COOLDOWN then
@@ -2307,16 +2411,16 @@ function inputHandlers.handleTouchMoved(touch, gameProcessed)
     end
 
     if not dragStartPos then
-        dragStartPos = touch.Position
+        dragStartPos = touchPos
         return
     end
 
-    local delta = touch.Position - dragStartPos
+    local delta = touchPos - dragStartPos
     if delta.Magnitude < DRAG_THRESHOLD then
         return
     end
 
-    local col, row = getCellFromMouse(touch.Position)
+    local col, row = getCellFromMouse(touchPos)
     if not col or not row then
         return
     end
@@ -2335,7 +2439,7 @@ function inputHandlers.handleTouchMoved(touch, gameProcessed)
     local didSwap = setDragTarget(col, row)
     if didSwap then
         lastSwapTime = now
-        dragStartPos = touch.Position
+        dragStartPos = touchPos
     end
 end
 
@@ -2594,6 +2698,9 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
         updateDuelMeta(data)
         updateHPHud(data.selfHP, data.enemyHP, data.opponentName)
+        if (tonumber(data.damage) or 0) > 0 then
+            playMonsterHitCameraShake(MONSTER_HIT_CAMERA_SHAKE_DURATION, MONSTER_HIT_CAMERA_SHAKE_INTENSITY)
+        end
         return
     end
 

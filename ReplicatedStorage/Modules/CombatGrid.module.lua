@@ -14,7 +14,7 @@
 
 local CombatGrid = {}
 
-local COLS = 6
+local COLS = 5
 local ROWS = 5
 local MIN_COMBO = 3
 

@@ -77,9 +77,13 @@ local DUEL_PLAYER_DISTANCE = 40
 local MONSTER_DUEL_PLAYER_DISTANCE = 34
 local DUEL_SIDE_SHIFT = 8
 local MONSTER_DUEL_SIDE_SHIFT = 8
+local WORLD_LEFT_COMBAT_SHIFT_STUDS = 10
 local GROUND_ALIGN_RAYCAST_HEIGHT = 40
 local GROUND_ALIGN_RAYCAST_DEPTH = 220
 local DEFAULT_HRP_GROUND_OFFSET = 3
+local BITS_ATTRIBUTE_NAME = "Bits"
+local ENERGY_ATTRIBUTE_NAME = "CaptureEnergy"
+local ENERGY_MAX_ATTRIBUTE_NAME = "CaptureEnergyMax"
 local PET_CUBES_WORLD_FOLDER = "PlayerPetCubes"
 local VFX_PROJECTILE_SIZE = Vector3.new(1, 1, 1)
 local VFX_PROJECTILE_TRAVEL_TIME = 0.35
@@ -93,6 +97,13 @@ local ELEMENT_PROJECTILE_COLORS = {
     Planta = Color3.fromRGB(90, 220, 110),
     Electricidad = Color3.fromRGB(255, 235, 80),
     Roca = Color3.fromRGB(170, 145, 110),
+}
+
+local MONSTER_PVE_ECONOMY_BY_RARITY = {
+    common = { energyCost = 5, bitsReward = 50 },
+    rare = { energyCost = 10, bitsReward = 120 },
+    epic = { energyCost = 16, bitsReward = 260 },
+    legendary = { energyCost = 24, bitsReward = 500 },
 }
 
 local function getPlayerPetCubePart(player, slot)
@@ -178,6 +189,92 @@ local function getPlayerTargetPosition(player)
     end
 
     return nil
+end
+
+local function getPlayerIntAttribute(player, attributeName, fallback)
+    -- Propósito: Leer un atributo numérico del jugador y normalizarlo a entero seguro.
+    -- Precondiciones:
+    --   1. player debe ser Player válido.
+    --   2. attributeName debe ser string.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: number
+    local numeric = tonumber(player:GetAttribute(attributeName))
+    if not numeric then
+        return fallback
+    end
+    return math.floor(numeric)
+end
+
+local function normalizeMonsterRarity(rarity)
+    -- Propósito: Normalizar rareza para lookup robusto de tabla económica PvE.
+    -- Precondiciones:
+    --   1. rarity puede ser string o nil.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: string
+    if type(rarity) ~= "string" then
+        return "common"
+    end
+
+    local lowered = string.lower(string.match(rarity, "^%s*(.-)%s*$") or "")
+    if lowered == "" then
+        return "common"
+    end
+
+    if MONSTER_PVE_ECONOMY_BY_RARITY[lowered] then
+        return lowered
+    end
+
+    return "common"
+end
+
+local function getMonsterPveEconomyConfig(monsterId)
+    -- Propósito: Resolver costo de energía y recompensa de Bits según rareza del Beastibit salvaje.
+    -- Precondiciones:
+    --   1. monsterId debe ser string válido presente en MonstersData.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: table, string
+    local monsterData = MonstersData[monsterId]
+    local rarityKey = normalizeMonsterRarity(type(monsterData) == "table" and monsterData.Rarity or nil)
+    local config = MONSTER_PVE_ECONOMY_BY_RARITY[rarityKey] or MONSTER_PVE_ECONOMY_BY_RARITY.common
+
+    return {
+        energyCost = math.max(0, math.floor(tonumber(config.energyCost) or 0)),
+        bitsReward = math.max(0, math.floor(tonumber(config.bitsReward) or 0)),
+    }, rarityKey
+end
+
+local function consumePlayerEnergyForMonsterDuel(player, energyCost)
+    -- Propósito: Descontar energía del jugador para iniciar un duelo PvE de forma segura.
+    -- Precondiciones:
+    --   1. player debe ser Player válido.
+    --   2. energyCost debe ser number >= 0.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: boolean, number, number
+    local maxEnergy = math.max(1, getPlayerIntAttribute(player, ENERGY_MAX_ATTRIBUTE_NAME, 100))
+    local currentEnergy = math.clamp(getPlayerIntAttribute(player, ENERGY_ATTRIBUTE_NAME, maxEnergy), 0, maxEnergy)
+    local safeCost = math.max(0, math.floor(tonumber(energyCost) or 0))
+
+    if currentEnergy < safeCost then
+        return false, currentEnergy, safeCost
+    end
+
+    local nextEnergy = currentEnergy - safeCost
+    player:SetAttribute(ENERGY_ATTRIBUTE_NAME, nextEnergy)
+    return true, nextEnergy, safeCost
+end
+
+local function awardPlayerBits(player, bitsDelta)
+    -- Propósito: Sumar Bits al jugador al finalizar recompensas de PvE.
+    -- Precondiciones:
+    --   1. player debe ser Player válido.
+    --   2. bitsDelta debe ser number.
+    -- Ubicación: ServerScriptService/CombatServer
+    -- Retorna: number, number
+    local safeDelta = math.max(0, math.floor(tonumber(bitsDelta) or 0))
+    local currentBits = math.max(0, getPlayerIntAttribute(player, BITS_ATTRIBUTE_NAME, 0))
+    local nextBits = currentBits + safeDelta
+    player:SetAttribute(BITS_ATTRIBUTE_NAME, nextBits)
+    return safeDelta, nextBits
 end
 
 local function spawnProjectileVfx(startPos, targetPos, element)
@@ -629,10 +726,13 @@ local function setupDuelParticipants(duel)
     end
     local sideShift = -right * DUEL_SIDE_SHIFT
 
+    local worldLeftShift = Vector3.new(-WORLD_LEFT_COMBAT_SHIFT_STUDS, 0, 0)
     local posA = center - (forward * (DUEL_PLAYER_DISTANCE * 0.5))
     local posB = center + (forward * (DUEL_PLAYER_DISTANCE * 0.5))
     posA += sideShift
     posB += sideShift
+    posA += worldLeftShift
+    posB += worldLeftShift
     local pvpIgnore = { charA, charB }
     posA = alignTargetToGround(hrpA, posA, pvpIgnore)
     posB = alignTargetToGround(hrpB, posB, pvpIgnore)
@@ -1237,14 +1337,23 @@ local function endMonsterDuel(player, reason, winner)
     end
 
     local winnerUserId = nil
+    local bitsDelta = 0
+    local newBitsTotal = math.max(0, getPlayerIntAttribute(player, BITS_ATTRIBUTE_NAME, 0))
     if winner == "player" then
         winnerUserId = player.UserId
+        local rewardedBits, bitsTotal = awardPlayerBits(player, duel.bitsRewardOnWin)
+        bitsDelta = rewardedBits
+        newBitsTotal = bitsTotal
     end
 
     sendDuelState(player, {
         type = "duel-ended",
         winnerUserId = winnerUserId,
         reason = reason or "duel-ended",
+        bitsDelta = bitsDelta,
+        newBits = newBitsTotal,
+        energyCost = duel.energyCostOnStart,
+        monsterRarity = duel.monsterRarity,
     })
 
     dbg("duelo NPC finalizado: " .. player.Name .. " | razon=" .. tostring(reason) .. " | ganador=" .. tostring(winner))
@@ -1279,6 +1388,7 @@ local function setupMonsterDuelParticipant(duel)
     end
     local forward = flatDir.Unit
 
+    local worldLeftShift = Vector3.new(-WORLD_LEFT_COMBAT_SHIFT_STUDS, 0, 0)
     local targetPos = monsterPos + (forward * MONSTER_DUEL_PLAYER_DISTANCE)
     targetPos = Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z)
 
@@ -1298,6 +1408,7 @@ local function setupMonsterDuelParticipant(duel)
         right = right.Unit
     end
     targetPos += (-right * MONSTER_DUEL_SIDE_SHIFT)
+    targetPos += worldLeftShift
     targetPos = alignTargetToGround(hrp, targetPos, { character, duel.monsterModel })
 
     hrp.Anchored = true
@@ -1517,6 +1628,19 @@ local function onMonsterChallenged(player, monsterModel)
         return
     end
 
+    local economyConfig, rarityKey = getMonsterPveEconomyConfig(monsterId)
+    local canSpendEnergy, currentEnergy, requiredEnergy = consumePlayerEnergyForMonsterDuel(player, economyConfig.energyCost)
+    if not canSpendEnergy then
+        sendDuelState(player, {
+            type = "challenge-failed",
+            reason = "energy-low",
+            currentEnergy = currentEnergy,
+            requiredEnergy = requiredEnergy,
+            monsterRarity = rarityKey,
+        })
+        return
+    end
+
     local playerHP = TeamManager.calculateTeamHP(playerTeam)
     local monsterHP = calculateWildMonsterMaxHP(monsterId)
 
@@ -1528,6 +1652,9 @@ local function onMonsterChallenged(player, monsterModel)
         monsterRoot = monsterRoot,
         monsterName = monsterModel.Name,
         monsterId = monsterId,
+        monsterRarity = rarityKey,
+        energyCostOnStart = requiredEnergy,
+        bitsRewardOnWin = economyConfig.bitsReward,
         monsterStars = 0,
         monsterTeam = monsterTeam,
         playerHP = playerHP,

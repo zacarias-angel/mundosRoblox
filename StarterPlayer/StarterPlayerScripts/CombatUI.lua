@@ -1546,7 +1546,7 @@ duelResultContinueBtn.MouseButton1Click:Connect(function()
     duelResultOverlay.Visible = false
 end)
 
-local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind)
+local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind, bitsDelta)
     -- Propósito: Mostrar overlay de Victoria o Derrota con cambio de estrellas.
     -- Precondiciones:
     --   1. isVictory debe ser boolean.
@@ -1556,6 +1556,7 @@ local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind
     -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
     -- Retorna: nil
     local delta = tonumber(starsDelta) or 0
+    local safeBitsDelta = math.max(0, math.floor(tonumber(bitsDelta) or 0))
     local kind = tostring(opponentKind or "player")
 
     if isVictory then
@@ -1593,7 +1594,23 @@ local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind
         duelResultStarsTotal.Visible = false
     end
 
-    duelResultDropsLabel.Text = "[ Drops próximamente ]"
+    if isVictory then
+        local rewardBits = safeBitsDelta
+        if rewardBits <= 0 and kind == "monster" then
+            rewardBits = 50
+        end
+
+        if rewardBits > 0 then
+            duelResultDropsLabel.Text = "[$] +" .. tostring(rewardBits) .. " Bits"
+            duelResultDropsLabel.TextColor3 = Color3.fromRGB(255, 220, 120)
+        else
+            duelResultDropsLabel.Text = "[$] +50 Bits"
+            duelResultDropsLabel.TextColor3 = Color3.fromRGB(255, 220, 120)
+        end
+    else
+        duelResultDropsLabel.Text = "[$] +0 Bits"
+        duelResultDropsLabel.TextColor3 = Color3.fromRGB(120, 130, 160)
+    end
 
     duelResultOverlay.Visible = true
 end
@@ -2724,7 +2741,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         local deltaStars = tonumber(data.starsDelta) or 0
         local newStarsTotal = tonumber(data.newSelfStars)
 
-        showDuelResult(isVictory, deltaStars, newStarsTotal, endedOpponentKind)
+        showDuelResult(isVictory, deltaStars, newStarsTotal, endedOpponentKind, data.bitsDelta)
 
         local endMsg
         if isVictory then

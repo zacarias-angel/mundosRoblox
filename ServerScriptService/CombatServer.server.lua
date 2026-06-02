@@ -285,7 +285,7 @@ local function spawnProjectileVfx(startPos, targetPos, element)
     -- Retorna: nil
     if typeof(startPos) ~= "Vector3" or typeof(targetPos) ~= "Vector3" then
         return
-    end
+    end 
 
     CombatProjectileVfx:FireAllClients({
         startPos = startPos,

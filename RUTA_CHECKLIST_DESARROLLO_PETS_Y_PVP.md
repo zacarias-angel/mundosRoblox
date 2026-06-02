@@ -125,6 +125,10 @@ Pilares:
 
 - [ ] Definir esquema de datos maestro para especies y progresion.
 - [x] Definir esquema base de visual companion por especie en data. (MonstersData: img/evoActual + CompanionFollow)
+- [ ] Definir contrato tecnico obligatorio para modelos 3D Beastibit (PrimaryPart, orientacion, pivote, uniones).
+- [ ] Definir convencion unica de jerarquia para templates (Root, geometry, attachments).
+- [ ] Definir guia de escala y volumen visual por tier/rareza para evitar outliers.
+- [ ] Definir validacion de DuelLinePlacement como ajuste fino y no como parche estructural.
 - [ ] Definir versionado de datos para futuras expansiones.
 - [ ] Definir metodologia de balance (objetivos por tier/rareza).
 - [ ] Definir metricas a monitorear (uso de Beastibit, winrate, retencion por mundo).
@@ -134,6 +138,9 @@ Pilares:
 - [ ] Definir plan de pruebas funcionales por sistema.
 - [ ] Definir plan de pruebas de balance.
 - [ ] Definir plan de pruebas de rendimiento (movil y servidor).
+- [ ] Incluir test obligatorio de modelos Beastibit: follower + linea de duelo PvP + linea de duelo PvE.
+- [ ] Incluir test obligatorio de VFX desde slot 1 (BasePart y Model).
+- [ ] Incluir test de estabilidad estructural: sin piezas sueltas al spawnear.
 - [ ] Definir checklist de salida por version.
 
 ## 3. Ruta Recomendada (sin codigo)
@@ -279,6 +286,7 @@ Sprint siguiente recomendado:
 - Riesgo de desbalance fuerte si no se define tiering por rareza temprano.
 - Riesgo de retrabajo de UI si no se cierran reglas de captura/evolucion antes.
 - Riesgo de lag de servidor si el sistema de respawn no nace con limites.
+- Riesgo de debt tecnico en placement/VFX si no se impone normalizacion de modelos 3D.
 
 ## 7. Regla operativa para seguir
 

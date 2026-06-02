@@ -278,6 +278,55 @@ Nota de estado:
 - Estandarizar pivote/origen de modelos template para reducir offsets extremos.
 - Preparar animaciones reales de locomocion companion (actualmente follow por PivotTo).
 
+## 7.8 Normalizacion de modelos Beastibit (nuevo)
+
+Objetivo:
+
+- Garantizar que todos los modelos 3D Beastibit entren al juego con el mismo contrato tecnico para evitar desfase, rotacion incorrecta, piezas separadas y fallos de VFX.
+
+Contrato tecnico obligatorio por modelo (MVP):
+
+- Debe ser un Model con al menos 1 BasePart valida.
+- Debe tener PrimaryPart definida.
+- Debe incluir una pieza root estable (nombre recomendado: HumanoidRootPart o Root).
+- El frente del modelo debe quedar orientado a -Z local (estandar Roblox).
+- El up del modelo debe quedar orientado a +Y local.
+- El pivote del Model debe quedar centrado en el cuerpo principal (no en piezas auxiliares).
+- Todas las piezas visuales deben estar rigidamente unidas al root (WeldConstraint/Motor6D/rig consistente).
+- No dejar piezas sueltas sin union estructural.
+- No usar partes Anchored dentro del template final para companions/duelo.
+- Mantener escala consistente por especie segun guia de tamano (evitar outliers extremos).
+
+Convencion de jerarquia recomendada:
+
+- Model (nombre = MonsterId o ModelTemplate)
+- RootPart (PrimaryPart)
+- Geometry (mallas/piezas visuales)
+- Attachments opcionales para VFX (Muzzle, HitOrigin) cuando aplique
+
+Campos de ajuste por especie (solo para excepciones):
+
+- CompanionFollow: offsets de seguimiento fuera de duelo.
+- DuelLinePlacement: offsets exclusivos para fila de duelo.
+- Regla: primero normalizar modelo en origen; offsets solo para ajuste fino, no para corregir modelos rotos.
+
+Pipeline de validacion antes de publicar un modelo:
+
+1. Verificar PrimaryPart, orientacion y pivote en template.
+2. Verificar uniones internas (sin piezas sueltas).
+3. Probar spawn como follower (mundo abierto).
+4. Probar spawn en linea de duelo PvP y PvE.
+5. Verificar origen de proyectil/VFX sobre slot 1.
+6. Registrar offsets minimos en MonstersData solo si son necesarios.
+
+Definicion de listo para produccion (Definition of Done):
+
+- Modelo estable en follower y en duelo sin drift ni separacion.
+- Rotacion correcta frente a rival en linea de duelo.
+- Sin dependencia de correcciones agresivas runtime.
+- VFX de ataque sale desde posicion coherente del Beastibit.
+- Documentado en MonstersData con ModelTemplate y (si aplica) DuelLinePlacement.
+
 ## 8. Riesgos Tecnicos Detectados
 
 1. Persistencia DataStore: no hay estrategia de reintentos/cola para fallos temporales.
@@ -285,6 +334,7 @@ Nota de estado:
 3. Complejidad creciente de CombatServer: conviene separar en sub-modulos (duelos, NPC, damage, sync).
 4. PlanetGravityController es robusto pero largo; mantenimiento puede complicarse sin separar en modulos cliente.
 5. Variacion de pivote/orientacion entre modelos Beastibit puede requerir calibracion por especie.
+6. Falta de contrato unico de modelos puede generar deuda tecnica en placement y VFX.
 
 ## 9. Resumen Ejecutivo
 
@@ -301,3 +351,4 @@ Siguiente foco recomendado:
 1. Pulido final del contador de estrellas (anclaje visual perfecto en movimiento).
 2. VFX/feedback de progreso PvP.
 3. Limpieza de arquitectura y documentacion para escalar contenido.
+4. Cerrar y aplicar estandar de normalizacion de modelos Beastibit para nuevos assets.

@@ -128,8 +128,32 @@ local function getPlayerPetCubePart(player, slot)
     if not cube and slotIndex >= 0 then
         cube = playerFolder:FindFirstChild("PetCube_" .. tostring(slotIndex + 1))
     end
+    if not cube then
+        for _, child in ipairs(playerFolder:GetChildren()) do
+            if string.sub(child.Name, 1, 8) == "PetCube_" then
+                cube = child
+                break
+            end
+        end
+    end
     if cube and cube:IsA("BasePart") then
         return cube
+    end
+
+    if cube and cube:IsA("Model") then
+        local rootPart = cube.PrimaryPart
+        if not rootPart or not rootPart:IsA("BasePart") then
+            local preferredRoot = cube:FindFirstChild("HumanoidRootPart", true)
+            if preferredRoot and preferredRoot:IsA("BasePart") then
+                rootPart = preferredRoot
+            else
+                rootPart = cube:FindFirstChildWhichIsA("BasePart", true)
+            end
+        end
+
+        if rootPart and rootPart:IsA("BasePart") then
+            return rootPart
+        end
     end
 
     return nil

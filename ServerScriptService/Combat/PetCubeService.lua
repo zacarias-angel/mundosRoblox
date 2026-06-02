@@ -202,6 +202,35 @@ local function resolveCompanionFollowConfig(monsterData)
     return cfg
 end
 
+local function resolveDuelLineConfig(monsterData)
+    -- Propósito: Resolver offsets exclusivos para formación en línea de duelo.
+    -- Precondiciones:
+    --   1. monsterData puede ser nil o tabla.
+    -- Ubicación: ServerScriptService/Combat/PetCubeService
+    -- Retorna: table
+    local cfg = {
+        sideOffsetStuds = 0,
+        heightOffsetStuds = 0,
+        forwardOffsetStuds = 0,
+        yawOffsetDeg = 0,
+        pitchOffsetDeg = 0,
+        rollOffsetDeg = 0,
+    }
+
+    if type(monsterData) ~= "table" or type(monsterData.DuelLinePlacement) ~= "table" then
+        return cfg
+    end
+
+    local source = monsterData.DuelLinePlacement
+    cfg.sideOffsetStuds = tonumber(source.SideOffsetStuds) or 0
+    cfg.heightOffsetStuds = tonumber(source.HeightOffsetStuds) or 0
+    cfg.forwardOffsetStuds = tonumber(source.ForwardOffsetStuds) or 0
+    cfg.yawOffsetDeg = tonumber(source.YawOffsetDeg) or 0
+    cfg.pitchOffsetDeg = tonumber(source.PitchOffsetDeg) or 0
+    cfg.rollOffsetDeg = tonumber(source.RollOffsetDeg) or 0
+    return cfg
+end
+
 local function computeFollowerGoalPosition(hrp, raycastParams, followerState)
     -- Propósito: Calcular destino orgánico del Beastibit detrás del jugador con ajuste a suelo.
     -- Precondiciones:
@@ -439,6 +468,115 @@ local function resolveModelTemplate(monsterId, monsterData)
     return nil
 end
 
+local function createDuelLineModel(templateModel, spawnCFrame, playerFolder, hrp, index, duelLineConfig)
+    -- Propósito: Crear Beastibit 3D en línea de duelo y soldarlo al jugador.
+    -- Precondiciones:
+    --   1. templateModel debe ser Model válida.
+    --   2. spawnCFrame debe ser CFrame válida.
+    -- Ubicación: ServerScriptService/Combat/PetCubeService
+    -- Retorna: boolean
+    local model = templateModel:Clone()
+    model.Name = "PetCube_" .. tostring(index)
+    model:SetAttribute("IsMonster", false)
+    model:SetAttribute("IsCompanion", true)
+    pcall(function()
+        model:SetAttribute("MonsterId", nil)
+    end)
+
+    local hasBasePart = false
+    local firstBasePart = nil
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("ProximityPrompt") and descendant.Name == "MonsterChallengePrompt" then
+            descendant:Destroy()
+            continue
+        end
+
+        if descendant:IsA("BasePart") then
+            hasBasePart = true
+            if not firstBasePart then
+                firstBasePart = descendant
+            end
+            descendant.Anchored = false
+            descendant.Massless = true
+            descendant.CanCollide = false
+            descendant.CanQuery = false
+            descendant.CanTouch = false
+        end
+    end
+
+    if not hasBasePart then
+        model:Destroy()
+        return false
+    end
+
+    if not model.PrimaryPart then
+        local preferredRoot = model:FindFirstChild("HumanoidRootPart", true)
+        if preferredRoot and preferredRoot:IsA("BasePart") then
+            model.PrimaryPart = preferredRoot
+        elseif firstBasePart then
+            model.PrimaryPart = firstBasePart
+        end
+    end
+
+    local rootPart = model.PrimaryPart
+    if not rootPart or not rootPart:IsA("BasePart") then
+        model:Destroy()
+        return false
+    end
+
+    local cfg = duelLineConfig or {}
+    local placementOffset = CFrame.new(
+        tonumber(cfg.sideOffsetStuds) or 0,
+        tonumber(cfg.heightOffsetStuds) or 0,
+        tonumber(cfg.forwardOffsetStuds) or 0
+    )
+    local orientationOffset = CFrame.Angles(
+        math.rad(tonumber(cfg.pitchOffsetDeg) or 0),
+        math.rad(tonumber(cfg.yawOffsetDeg) or 0),
+        math.rad(tonumber(cfg.rollOffsetDeg) or 0)
+    )
+
+    -- En duelo ignoramos offsets de follow y usamos solo offsets de DuelLinePlacement.
+    model:PivotTo(spawnCFrame * placementOffset * orientationOffset)
+
+    local autoWeldToRoot = true
+    if cfg.autoWeldToRoot ~= nil then
+        autoWeldToRoot = cfg.autoWeldToRoot == true
+    end
+
+    if autoWeldToRoot then
+        for _, descendant in ipairs(model:GetDescendants()) do
+            if descendant:IsA("BasePart") and descendant ~= rootPart then
+                local hasJoint = false
+                for _, joint in ipairs(descendant:GetChildren()) do
+                    if joint:IsA("WeldConstraint") then
+                        hasJoint = true
+                        break
+                    end
+                end
+
+                if not hasJoint then
+                    local partWeld = Instance.new("WeldConstraint")
+                    partWeld.Name = "DuelLineRootWeld"
+                    partWeld.Part0 = descendant
+                    partWeld.Part1 = rootPart
+                    partWeld.Parent = descendant
+                end
+            end
+        end
+    end
+
+    model.Parent = playerFolder
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Name = "FollowWeld"
+    weld.Part0 = rootPart
+    weld.Part1 = hrp
+    weld.Parent = rootPart
+
+    return true
+end
+
 local function startFollowerTracking(player, followerState, hrp, character)
     -- Propósito: Iniciar seguimiento con lerp/catch-up para evitar movimiento rígido del Beastibit.
     -- Precondiciones:
@@ -629,7 +767,7 @@ function PetCubeService.spawnPlayerTeamCubes(player, team, selectedFollowerMonst
 end
 
 function PetCubeService.spawnPlayerTeamDuelLine(player, team, enemyPosition)
-    -- Propósito: Mostrar 5 cubos del equipo en línea frente al domador mirando al contrincante.
+    -- Propósito: Mostrar Beastibit del equipo en línea frente al domador mirando al contrincante.
     -- Precondiciones:
     --   1. player debe ser instancia Player válida.
     --   2. team debe ser tabla de mascotas.
@@ -641,6 +779,7 @@ function PetCubeService.spawnPlayerTeamDuelLine(player, team, enemyPosition)
     end
 
     PetCubeService.ensureElementTemplates()
+    PetCubeService.ensureModelTemplateFolder()
     PetCubeService.clearPlayerCubes(player)
 
     local character = player.Character
@@ -684,30 +823,39 @@ function PetCubeService.spawnPlayerTeamDuelLine(player, team, enemyPosition)
     for index, pet in ipairs(team) do
         local monsterData = MonstersData[pet.MonsterId]
         if monsterData then
-            local element = monsterData.Element
-            local template = templateFolder:FindFirstChild("Cube_" .. tostring(element))
-            if template and template:IsA("Part") then
-                local sideOffset = (index - centerIndex) * sideSpacing
-                local offset = (forward * frontDistance) + (right * sideOffset) + Vector3.new(0, 2.5, 0)
+            local sideOffset = (index - centerIndex) * sideSpacing
+            local offset = (forward * frontDistance) + (right * sideOffset) + Vector3.new(0, 2.5, 0)
+            local worldPos = hrp.Position + offset
+            local spawnCFrame = CFrame.lookAt(worldPos, worldPos + forward, Vector3.new(0, 1, 0))
 
-                local cube = template:Clone()
-                cube.Name = "PetCube_" .. tostring(index)
-                cube.Anchored = false
-                cube.Massless = true
-                cube.CanCollide = false
-                cube.CanQuery = false
-                cube.CanTouch = false
+            local didSpawnModel = false
+            local modelTemplate = resolveModelTemplate(pet.MonsterId, monsterData)
+            if modelTemplate then
+                local duelLineConfig = resolveDuelLineConfig(monsterData)
+                didSpawnModel = createDuelLineModel(modelTemplate, spawnCFrame, playerFolder, hrp, index, duelLineConfig)
+            end
 
-                local worldPos = hrp.Position + offset
-                cube.CFrame = CFrame.lookAt(worldPos, worldPos + forward, Vector3.new(0, 1, 0))
+            if not didSpawnModel then
+                local element = monsterData.Element
+                local template = templateFolder:FindFirstChild("Cube_" .. tostring(element))
+                if template and template:IsA("Part") then
+                    local cube = template:Clone()
+                    cube.Name = "PetCube_" .. tostring(index)
+                    cube.Anchored = false
+                    cube.Massless = true
+                    cube.CanCollide = false
+                    cube.CanQuery = false
+                    cube.CanTouch = false
+                    cube.CFrame = spawnCFrame
 
-                local weld = Instance.new("WeldConstraint")
-                weld.Name = "FollowWeld"
-                weld.Part0 = cube
-                weld.Part1 = hrp
-                weld.Parent = cube
+                    local weld = Instance.new("WeldConstraint")
+                    weld.Name = "FollowWeld"
+                    weld.Part0 = cube
+                    weld.Part1 = hrp
+                    weld.Parent = cube
 
-                cube.Parent = playerFolder
+                    cube.Parent = playerFolder
+                end
             end
         end
     end

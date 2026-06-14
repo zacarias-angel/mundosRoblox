@@ -1,6 +1,6 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-05-30
+Fecha de actualizacion: 2026-06-13
 
 Terminologia oficial:
 
@@ -32,10 +32,14 @@ Arquitectura actual:
 - ServerScriptService/Combat/MonsterCombat.lua
 - ServerScriptService/Combat/PetCubeService.lua
 - ServerScriptService/Combat/PvpStarsService.lua
+- ServerScriptService/EconomyState.server.lua
+- ServerScriptService/BackpackDataStore.server.lua
 - ReplicatedStorage/Modules/CombatGrid.module.lua
 - ReplicatedStorage/Modules/BeastibitVisuals.module.lua
 - ReplicatedStorage/Modules/Debug.lua
 - ReplicatedStorage/GameData/MonstersData.lua
+- ReplicatedStorage/GameData/FragmentsData.lua
+- ReplicatedStorage/GameData/SpawnMatrix.lua
 
 ## 2.2 Gravedad Planetaria
 
@@ -145,6 +149,52 @@ Funcionalidad actual:
 - Follow adaptado a gravedad planetaria (usa UpVector local del personaje, no eje Y global).
 - Configuracion de follow y orientacion movida a MonstersData por especie (CompanionFollow), evitando depender de muchos atributos en el modelo template.
 
+## 3.7 Sistema de Captura, Fragmentos y Minerales (Fase 1)
+
+Estado: IMPLEMENTADO
+
+Archivos nuevos: FragmentsData.lua, SpawnMatrix.lua, BackpackDataStore.server.lua
+
+### 3.7.1 Captura directa post-combate PvE
+
+- Al ganar un duelo PvE, se lanza roll de captura segun rareza del Beastibit salvaje.
+- Chances base: Comun 60%, Raro 40%, Epico 5%. Legendario no se captura directo.
+- Pity system: +5% acumulativo por fallo (por rareza), se resetea al capturar.
+
+### 3.7.2 Fragmentos al fallar captura
+
+- Si falla la captura, el jugador recibe fragmentos de esa especie.
+- Drops: Comun 5, Raro 15, Epico 25 fragmentos.
+- Craft por fragmentos: Comun 30, Raro 80, Epico 150 fragmentos.
+
+### 3.7.3 Minerales planetarios
+
+- Drop de mineral al ganar PvE (20% chance), mapeado por elemento del Beastibit.
+- Minerales Bitara Prime: Magma Core (Fuego), Aqua Shard (Agua), Root Crystal (Planta), Volt Core (Electricidad).
+- Minerales Korvaxis: Stone Heart (Roca), Pulse Fragment (asignado al bioma Energia).
+
+### 3.7.4 Persistencia de inventario
+
+- DataStore BackpackV1 guarda Beastibits desbloqueados y fragmentos por jugador.
+- TeamManager administra perfil en memoria con unlockedMonsters y fragments.
+- Flujo: carga al entrar (BackpackDataStore.loadPlayerData) y guardado al salir (savePlayerData).
+- Roster-sync envia fragmentos al cliente para la UI de mochila.
+
+### 3.7.5 Beastibits totales (20 especies)
+
+- Mundo 1 - Bitara Prime: 14 especies (SlimeFuego, LoboAgua, TortugaPlanta, HalconElectrico, GolemRoca, Demonslime1, ZorroBrasa, MareaLince, HongoGuardian, RayoMantis, ObsidianaToro, Bloompup, Infervex, Leviacode).
+- Mundo 2 - Korvaxis: 6 especies (Elderthorn, Titanox, Nullbyte, Pebblit, Sparkhog, Stormram).
+- Elementos: Fuego, Agua, Planta, Electricidad, Roca (5 elementos).
+- Rarezas: Common (10), Rare (5), Epic (3), Legendary (2).
+- SpawnMatrix.lua define distribucion por bioma y rango de niveles.
+
+## 3.8 Recurso de Captura y Energia
+
+- Energia de captura: max 100, regenera +5 cada 12 min (~4h para llenar).
+- Consumo de energia al iniciar duelo PvE: Comun 5, Raro 10, Epico 16, Legendario 24.
+- Bits: moneda principal, se obtienen al ganar duelos PvE.
+- Bit Spheres: ELIMINADAS del diseno final. No existe recurso de captura externo.
+
 ## 4. Sistema De Estrellas PvP (nuevo avance)
 
 Estado: IMPLEMENTADO
@@ -162,11 +212,12 @@ Funcionalidad actual:
 - Integrado en CombatServer.endDuel para que aplique solo en PvP real.
 - Sin impacto en poder de combate: las estrellas NO aumentan ataque, vida ni stats.
 
-Direccion de diseno confirmada:
+Direccion de diseno confirmada (congelada V1):
 
 - Las estrellas funcionan como prestigio/ranking social.
-- Se planea desbloqueo de titulos por hitos de estrellas.
-- Se planea sistema de protectores de estrella por cargas limitadas (no infinitos).
+- Titulos PvP definidos: Rookie (0), Hunter (10), Tamer (25), Elite (50), Master (100), Legend (200), Bitlord (500).
+- Shield Charges: maximo 3, obtencion 1 diaria + 1 semanal, se consume al perder (excepto en 0 estrellas).
+- Los titulos y Shield Charges estan pendientes de implementacion en codigo.
 
 Visual del contador:
 
@@ -224,13 +275,20 @@ Nota de estado:
 20. Regla de miss elemental en IA NPC: elemento no correspondiente aplica 0 daño.
 21. Ajuste de VFX NPC: 1 proyectil por ataque del salvaje (aunque combo sea alto).
 22. Integracion de camera shake corto al impacto del salvaje en cliente.
+23. Sistema de captura directa post-combate PvE con pity por rareza.
+24. Fragmentos al fallar captura y sistema de craft por fragmentos.
+25. Drops de minerales planetarios al ganar PvE.
+26. Persistencia de inventario Beastibit y fragmentos con DataStore BackpackV1.
+27. 20 Beastibits definidos: nuevas especies Bloompup, Pebblit, Sparkhog, Stormram, Infervex, Leviacode, Elderthorn, Titanox, Nullbyte.
+28. SpawnMatrix con distribucion por bioma, niveles y minerales por planeta.
+29. Eliminacion de Bit Spheres: captura directa sin recurso externo.
 
 ## 7. Lo Que Falta O Requiere Pulido
 
 ## 7.1 Combate
 
+- [X] Conectar dano/recompensas a sistema de progreso real (captura, fragmentos, minerales, Bits).
 - Sincronizar aun mas fino el combo visual con cada sub-evento de cascada.
-- Conectar dano/recompensas a sistema de progreso real (economia, inventario, nivel).
 - Definir reglas de ranking para casos especiales:
   - desconexion en duelo
   - abandono
@@ -246,13 +304,15 @@ Nota de estado:
 - Definir tabla final de titulos por hitos de estrellas.
 - Definir fuentes y limites de Shield Charges para no congelar la ladder.
 
-## 7.7 Economia de captura y progresion Beastibit (nuevo foco)
+## 7.7 Economia de captura y progresion Beastibit (APLICADO - Fase 1)
 
-- Cerrar nombre final del recurso de captura (Bit Spheres o Capture Cores).
-- Cerrar tabla numerica de drops por tipo de encuentro (comun/raro/elite/jefe).
-- Cerrar tabla de XP por rareza para comida con duplicados.
-- Cerrar costos de evolucion por planeta (minerales especificos + Bits).
-- Confirmar protecciones de seguridad para Beastibit favoritos/equipo/historia en alimentacion.
+- [X] Cerrar nombre final del recurso de captura: ELIMINADO (sin recurso externo, captura directa).
+- [X] Cerrar tabla numerica de drops: fragmentos + minerales implementados.
+- [X] Persistencia de inventario Beastibit con DataStore BackpackV1.
+- [X] Sistema de captura directa con pity por rareza.
+- [ ] Cerrar tabla de XP por rareza para comida con duplicados (pendiente fase 2).
+- [ ] Cerrar costos de evolucion por planeta (minerales especificos + Bits) (pendiente fase 2).
+- [ ] Confirmar protecciones de seguridad para Beastibit favoritos/equipo/historia en alimentacion (pendiente fase 2).
 
 ## 7.3 Gravedad planetaria
 
@@ -329,26 +389,31 @@ Definicion de listo para produccion (Definition of Done):
 
 ## 8. Riesgos Tecnicos Detectados
 
-1. Persistencia DataStore: no hay estrategia de reintentos/cola para fallos temporales.
+1. Persistencia DataStore: dos DataStores activos (PvpStarsV1 y BackpackV1), sin estrategia de reintentos/cola para fallos temporales.
 2. Logging en produccion: alto ruido de consola en varios scripts.
-3. Complejidad creciente de CombatServer: conviene separar en sub-modulos (duelos, NPC, damage, sync).
+3. Complejidad creciente de CombatServer: conviene separar en sub-modulos (duelos, NPC, damage, sync, captura).
 4. PlanetGravityController es robusto pero largo; mantenimiento puede complicarse sin separar en modulos cliente.
 5. Variacion de pivote/orientacion entre modelos Beastibit puede requerir calibracion por especie.
 6. Falta de contrato unico de modelos puede generar deuda tecnica en placement y VFX.
 
 ## 9. Resumen Ejecutivo
 
-Estado general del proyecto: SOLIDO Y JUGABLE.
+Estado general del proyecto: SOLIDO Y JUGABLE. FASE 1 DE ECONOMIA COMPLETA.
 
 - Combate match-3: funcional en servidor/cliente, con cascadas y animaciones.
 - Duelos PvP/PvE: funcionales con estados completos.
+- Captura PvE: directa post-combate con pity, fragmentos y minerales.
+- Persistencia: DataStore para PvP (estrellas) e inventario (backpack + fragmentos).
 - Gravedad planetaria: funcional con sistema avanzado de movimiento y camara.
-- Nuevo progreso PvP por estrellas: implementado e integrado.
+- Progreso PvP por estrellas: implementado e integrado.
 - Beastibit seguidor 3D: implementado con fallback, separacion companion/salvaje y base planet-aware.
+- 20 Beastibits definidos en 2 planetas (Bitara Prime y Korvaxis), 5 elementos, 4 rarezas.
 
 Siguiente foco recomendado:
 
-1. Pulido final del contador de estrellas (anclaje visual perfecto en movimiento).
-2. VFX/feedback de progreso PvP.
-3. Limpieza de arquitectura y documentacion para escalar contenido.
-4. Cerrar y aplicar estandar de normalizacion de modelos Beastibit para nuevos assets.
+1. Implementar sistema de niveles/XP por alimentacion.
+2. Conectar costos de evolucion (Bits + minerales).
+3. UI de fragmentos y crafting en RosterUI.
+4. Shield Charges y titulos PvP por hitos de estrellas.
+5. VFX/feedback de progreso PvP.
+6. Limpieza de arquitectura y documentacion para escalar contenido.

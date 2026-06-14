@@ -29,6 +29,41 @@ local MonsterCombat = require(CombatFolder:WaitForChild("MonsterCombat"))
 local PetCubeService = require(CombatFolder:WaitForChild("PetCubeService"))
 local PvpStarsService = require(CombatFolder:WaitForChild("PvpStarsService"))
 
+local FragmentsDataModule = GameData:FindFirstChild("FragmentsData")
+local FragmentsData = FragmentsDataModule and require(FragmentsDataModule) or {
+    normalizeRarityKey = function(rarity)
+        local lowered = type(rarity) == "string" and string.lower(string.match(rarity, "^%s*(.-)%s*$") or "") or "common"
+        return lowered == "" and "common" or lowered
+    end,
+    getCaptureChance = function(rarity)
+        local chances = { common = 0.60, rare = 0.40, epic = 0.05 }
+        local key = type(rarity) == "string" and string.lower(string.match(rarity, "^%s*(.-)%s*$") or "common") or "common"
+        return chances[key] or 0
+    end,
+    getFragmentDrop = function(rarity)
+        local drops = { common = 5, rare = 15, epic = 25 }
+        local key = type(rarity) == "string" and string.lower(string.match(rarity, "^%s*(.-)%s*$") or "common") or "common"
+        return drops[key] or 0
+    end,
+    getFragmentCraftCost = function(rarity)
+        local costs = { common = 30, rare = 80, epic = 150 }
+        local key = type(rarity) == "string" and string.lower(string.match(rarity, "^%s*(.-)%s*$") or "common") or "common"
+        return costs[key] or 999
+    end,
+}
+
+local SpawnMatrixModule = GameData:FindFirstChild("SpawnMatrix")
+local SpawnMatrix = SpawnMatrixModule and require(SpawnMatrixModule) or {}
+
+local BackpackDataStoreModule = ServerScriptService:FindFirstChild("BackpackDataStore")
+local BackpackDataStore = BackpackDataStoreModule and require(BackpackDataStoreModule) or {
+    loadPlayerData = function(_player)
+        return { unlockedMonsters = {}, fragments = {} }
+    end,
+    savePlayerData = function(_player, _unlockedMonsters, _fragments)
+    end,
+}
+
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local CombatSubmit = RemoteEvents:WaitForChild("CombatSubmit")
 local CombatSync = RemoteEvents:WaitForChild("CombatSync")
@@ -36,12 +71,7 @@ local CombatChallengeRequest = RemoteEvents:WaitForChild("CombatChallengeRequest
 local CombatChallengeResponse = RemoteEvents:WaitForChild("CombatChallengeResponse")
 local CombatDuelState = RemoteEvents:WaitForChild("CombatDuelState")
 local CombatRosterAction = RemoteEvents:WaitForChild("CombatRosterAction")
-local CombatProjectileVfx = RemoteEvents:FindFirstChild("CombatProjectileVfx")
-if not CombatProjectileVfx then
-    CombatProjectileVfx = Instance.new("RemoteEvent")
-    CombatProjectileVfx.Name = "CombatProjectileVfx"
-    CombatProjectileVfx.Parent = RemoteEvents
-end
+local CombatProjectileVfx = RemoteEvents:WaitForChild("CombatProjectileVfx")
 
 local COLS, ROWS = CombatGrid.getSize()
 local DAMAGE_PER_CELL = 10
@@ -104,6 +134,17 @@ local MONSTER_PVE_ECONOMY_BY_RARITY = {
     rare = { energyCost = 10, bitsReward = 120 },
     epic = { energyCost = 16, bitsReward = 260 },
     legendary = { energyCost = 24, bitsReward = 500 },
+}
+
+local PITY_BONUS_PER_FAIL = 0.05
+local MINERAL_DROP_CHANCE = 0.20
+
+local ELEMENT_TO_MINERAL = {
+    Fuego = "Magma Core",
+    Agua = "Aqua Shard",
+    Planta = "Root Crystal",
+    Electricidad = "Volt Core",
+    Roca = "Stone Heart",
 }
 
 local function getPlayerPetCubePart(player, slot)
@@ -1363,11 +1404,58 @@ local function endMonsterDuel(player, reason, winner)
     local winnerUserId = nil
     local bitsDelta = 0
     local newBitsTotal = math.max(0, getPlayerIntAttribute(player, BITS_ATTRIBUTE_NAME, 0))
+    local captureResult = nil
+    local fragmentsAwarded = 0
+    local mineralAwarded = nil
+
     if winner == "player" then
         winnerUserId = player.UserId
         local rewardedBits, bitsTotal = awardPlayerBits(player, duel.bitsRewardOnWin)
         bitsDelta = rewardedBits
         newBitsTotal = bitsTotal
+
+        local monsterData = MonstersData[duel.monsterId]
+        if monsterData then
+            local rarityKey = normalizeMonsterRarity(monsterData.Rarity)
+            local baseChance = FragmentsData.getCaptureChance(rarityKey)
+
+            local pityAttr = "CapturePity_" .. rarityKey
+            local currentPity = getPlayerIntAttribute(player, pityAttr, 0)
+            local pityBonus = currentPity * PITY_BONUS_PER_FAIL
+            local finalChance = math.min(1.0, baseChance + pityBonus)
+
+            if math.random() <= finalChance then
+                local wasNew = TeamManager.unlockMonster(player, duel.monsterId)
+                captureResult = {
+                    captured = true,
+                    monsterId = duel.monsterId,
+                    wasNew = wasNew,
+                }
+                player:SetAttribute(pityAttr, 0)
+            else
+                local fragDrop = FragmentsData.getFragmentDrop(rarityKey)
+                if fragDrop > 0 then
+                    fragmentsAwarded = TeamManager.addFragments(player, duel.monsterId, fragDrop)
+                end
+                captureResult = {
+                    captured = false,
+                    monsterId = duel.monsterId,
+                    fragmentsDropped = fragDrop,
+                }
+                player:SetAttribute(pityAttr, currentPity + 1)
+            end
+
+            if monsterData.Element and ELEMENT_TO_MINERAL[monsterData.Element] and math.random() <= MINERAL_DROP_CHANCE then
+                local mineralName = ELEMENT_TO_MINERAL[monsterData.Element]
+                local mineralAttr = "Mineral_" .. mineralName
+                local currentMinerals = getPlayerIntAttribute(player, mineralAttr, 0)
+                player:SetAttribute(mineralAttr, currentMinerals + 1)
+                mineralAwarded = {
+                    name = mineralName,
+                    total = currentMinerals + 1,
+                }
+            end
+        end
     end
 
     sendDuelState(player, {
@@ -1378,6 +1466,9 @@ local function endMonsterDuel(player, reason, winner)
         newBits = newBitsTotal,
         energyCost = duel.energyCostOnStart,
         monsterRarity = duel.monsterRarity,
+        captureResult = captureResult,
+        fragmentsAwarded = fragmentsAwarded,
+        mineralAwarded = mineralAwarded,
     })
 
     dbg("duelo NPC finalizado: " .. player.Name .. " | razon=" .. tostring(reason) .. " | ganador=" .. tostring(winner))
@@ -1896,7 +1987,7 @@ local function onCombatChallengeResponse(player, payload)
 end
 
 local function sendRosterState(player, reason)
-    -- Propósito: Enviar al cliente el estado actual de mochila, seguidor y equipo de duelo.
+    -- Propósito: Enviar al cliente el estado actual de mochila, seguidor, equipo de duelo y fragmentos.
     -- Precondiciones:
     --   1. player debe ser instancia Player válida.
     -- Ubicación: ServerScriptService/CombatServer
@@ -1909,6 +2000,7 @@ local function sendRosterState(player, reason)
     local team = TeamManager.getOrCreateTeam(player)
     local backpack = TeamManager.getBackpack(player)
     local selectedFollowerMonsterId = TeamManager.getSelectedFollowerMonsterId(player)
+    local allFragments = TeamManager.getAllFragments(player)
 
     state.team = team
     state.backpack = backpack
@@ -1920,6 +2012,7 @@ local function sendRosterState(player, reason)
         duelTeam = team,
         backpack = backpack,
         selectedFollowerMonsterId = selectedFollowerMonsterId,
+        fragments = allFragments,
     })
 end
 
@@ -2333,12 +2426,16 @@ local function onCombatSubmit(player, payload)
 end
 
 Players.PlayerAdded:Connect(function(player)
+    local savedData = BackpackDataStore.loadPlayerData(player)
+    TeamManager.initializePlayer(player, savedData)
     PvpStarsService.onPlayerAdded(player)
     initPlayerState(player)
     bindCharacterSpawn(player)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
+    local unlockedMonsters, fragments = TeamManager.getProfileData(player)
+    BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments)
     PvpStarsService.onPlayerRemoving(player)
     cleanPlayerState(player)
 end)
@@ -2349,6 +2446,8 @@ CombatChallengeResponse.OnServerEvent:Connect(onCombatChallengeResponse)
 CombatRosterAction.OnServerEvent:Connect(onCombatRosterAction)
 
 for _, player in ipairs(Players:GetPlayers()) do
+    local savedData = BackpackDataStore.loadPlayerData(player)
+    TeamManager.initializePlayer(player, savedData)
     PvpStarsService.onPlayerAdded(player)
     if not playerStates[player] then
         initPlayerState(player)

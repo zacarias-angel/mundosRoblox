@@ -176,6 +176,114 @@ Monsters.ObsidianaToro = {
     },
 }
 
+Monsters.Bloompup = {
+    Name = "Bloompup",
+    Element = "Planta",
+    Rarity = "Common",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 142,
+        HP = 3050,
+        Speed = 1,
+    },
+}
+
+Monsters.Pebblit = {
+    Name = "Pebblit",
+    Element = "Roca",
+    Rarity = "Common",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 155,
+        HP = 3100,
+        Speed = 1,
+    },
+}
+
+Monsters.Sparkhog = {
+    Name = "Sparkhog",
+    Element = "Electricidad",
+    Rarity = "Common",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 158,
+        HP = 2950,
+        Speed = 1,
+    },
+}
+
+Monsters.Stormram = {
+    Name = "Stormram",
+    Element = "Electricidad",
+    Rarity = "Rare",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 185,
+        HP = 3500,
+        Speed = 1,
+    },
+}
+
+Monsters.Infervex = {
+    Name = "Infervex",
+    Element = "Fuego",
+    Rarity = "Epic",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 230,
+        HP = 5500,
+        Speed = 1,
+    },
+}
+
+Monsters.Leviacode = {
+    Name = "Leviacode",
+    Element = "Agua",
+    Rarity = "Epic",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 225,
+        HP = 5600,
+        Speed = 1,
+    },
+}
+
+Monsters.Elderthorn = {
+    Name = "Elderthorn",
+    Element = "Planta",
+    Rarity = "Epic",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 220,
+        HP = 5800,
+        Speed = 1,
+    },
+}
+
+Monsters.Titanox = {
+    Name = "Titanox",
+    Element = "Roca",
+    Rarity = "Legendary",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 260,
+        HP = 6500,
+        Speed = 1,
+    },
+}
+
+Monsters.Nullbyte = {
+    Name = "Nullbyte",
+    Element = "Electricidad",
+    Rarity = "Legendary",
+    StarterUnlocked = false,
+    BaseStats = {
+        Attack = 255,
+        HP = 6200,
+        Speed = 1,
+    },
+}
+
 for monsterId, monsterData in pairs(Monsters) do
     -- Propósito: Garantizar nuevos campos visuales y de evolución para todos los Beastibit.
     -- Precondiciones:

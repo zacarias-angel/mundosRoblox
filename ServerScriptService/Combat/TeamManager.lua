@@ -13,6 +13,20 @@ local TEAM_SIZE = 5
 
 local playerProfiles = {}
 
+local function ensureFragmentsTable(profile)
+	if type(profile.fragments) ~= "table" then
+		profile.fragments = {}
+	end
+	return profile.fragments
+end
+
+local function ensureUnlockedMonstersTable(profile)
+	if type(profile.unlockedMonsters) ~= "table" then
+		profile.unlockedMonsters = {}
+	end
+	return profile.unlockedMonsters
+end
+
 local function cloneTeam(team)
     -- Propósito: Clonar defensivamente una lista de mascotas del jugador.
     -- Precondiciones:
@@ -151,10 +165,11 @@ local function ensureBackpackHasTeamMonsters(backpack, team)
     end
 end
 
-local function getOrCreateProfile(player)
-    -- Propósito: Obtener o inicializar perfil en memoria del jugador (equipo, mochila, seguidor).
+local function getOrCreateProfile(player, savedData)
+    -- Propósito: Obtener o inicializar perfil en memoria del jugador (equipo, mochila, seguidor, fragmentos).
     -- Precondiciones:
     --   1. player debe ser instancia Player válida.
+    --   2. savedData puede ser nil o tabla con unlockedMonsters y fragments.
     -- Ubicación: ServerScriptService/Combat/TeamManager
     -- Retorna: table
     local existing = playerProfiles[player]
@@ -166,10 +181,41 @@ local function getOrCreateProfile(player)
     local backpack = buildDefaultBackpack()
     ensureBackpackHasTeamMonsters(backpack, defaultTeam)
 
+    local unlockedMonsters = {}
+    local fragments = {}
+
+    if type(savedData) == "table" then
+        if type(savedData.unlockedMonsters) == "table" then
+            for monsterId, unlocked in pairs(savedData.unlockedMonsters) do
+                if MonstersData[monsterId] and unlocked == true then
+                    unlockedMonsters[monsterId] = true
+                end
+            end
+        end
+        if type(savedData.fragments) == "table" then
+            for monsterId, amount in pairs(savedData.fragments) do
+                if MonstersData[monsterId] then
+                    local safeAmount = math.max(0, math.floor(tonumber(amount) or 0))
+                    if safeAmount > 0 then
+                        fragments[monsterId] = safeAmount
+                    end
+                end
+            end
+        end
+    end
+
+    for _, item in ipairs(backpack) do
+        if item.Unlocked == true then
+            unlockedMonsters[item.MonsterId] = true
+        end
+    end
+
     local profile = {
         duelTeam = defaultTeam,
         backpack = backpack,
         selectedFollowerMonsterId = chooseDefaultFollowerMonsterId(backpack, defaultTeam),
+        unlockedMonsters = unlockedMonsters,
+        fragments = fragments,
     }
 
     playerProfiles[player] = profile
@@ -299,6 +345,196 @@ function TeamManager.clearTeam(player)
     -- Ubicación: ServerScriptService/Combat/TeamManager
     -- Retorna: nil
     playerProfiles[player] = nil
+end
+
+function TeamManager.initializePlayer(player, savedData)
+    -- Propósito: Inicializar el perfil completo del jugador con datos persistidos.
+    -- Precondiciones:
+    --   1. player debe ser instancia Player válida.
+    --   2. savedData puede ser nil o tabla con unlockedMonsters y fragments.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: table
+    return getOrCreateProfile(player, savedData)
+end
+
+function TeamManager.isMonsterUnlocked(player, monsterId)
+    -- Propósito: Verificar si un Beastibit está desbloqueado para el jugador.
+    -- Precondiciones:
+    --   1. monsterId debe ser string válido.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: boolean
+    if type(monsterId) ~= "string" then
+        return false
+    end
+    local profile = getOrCreateProfile(player)
+    if profile.unlockedMonsters[monsterId] then
+        return true
+    end
+    return isMonsterUnlockedInBackpack(profile.backpack, monsterId)
+end
+
+function TeamManager.unlockMonster(player, monsterId)
+    -- Propósito: Desbloquear un Beastibit en el perfil y mochila del jugador.
+    -- Precondiciones:
+    --   1. monsterId debe existir en MonstersData.
+    --   2. player debe ser instancia Player válida.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: boolean wasNewlyUnlocked
+    if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
+        return false
+    end
+
+    local profile = getOrCreateProfile(player)
+
+    if profile.unlockedMonsters[monsterId] then
+        return false
+    end
+
+    profile.unlockedMonsters[monsterId] = true
+
+    local foundInBackpack = false
+    for _, item in ipairs(profile.backpack) do
+        if item.MonsterId == monsterId then
+            item.Unlocked = true
+            foundInBackpack = true
+            break
+        end
+    end
+
+    if not foundInBackpack then
+        table.insert(profile.backpack, {
+            MonsterId = monsterId,
+            Unlocked = true,
+        })
+    end
+
+    return true
+end
+
+function TeamManager.addFragments(player, monsterId, amount)
+    -- Propósito: Sumar fragmentos de un Beastibit al perfil del jugador.
+    -- Precondiciones:
+    --   1. monsterId debe existir en MonstersData.
+    --   2. amount debe ser number >= 0.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: number totalFragments
+    if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
+        return 0
+    end
+
+    local safeAmount = math.max(0, math.floor(tonumber(amount) or 0))
+    if safeAmount <= 0 then
+        return 0
+    end
+
+    local profile = getOrCreateProfile(player)
+    local fragments = ensureFragmentsTable(profile)
+
+    local current = tonumber(fragments[monsterId]) or 0
+    local nextAmount = current + safeAmount
+    fragments[monsterId] = nextAmount
+
+    return nextAmount
+end
+
+function TeamManager.getFragments(player, monsterId)
+    -- Propósito: Obtener la cantidad de fragmentos de un Beastibit.
+    -- Precondiciones:
+    --   1. monsterId debe ser string.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: number
+    if type(monsterId) ~= "string" then
+        return 0
+    end
+
+    local profile = getOrCreateProfile(player)
+    local fragments = ensureFragmentsTable(profile)
+    return math.max(0, tonumber(fragments[monsterId]) or 0)
+end
+
+function TeamManager.spendFragments(player, monsterId, amount)
+    -- Propósito: Gastar fragmentos de un Beastibit si hay suficientes.
+    -- Precondiciones:
+    --   1. monsterId debe ser string.
+    --   2. amount debe ser number > 0.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: boolean success, number remaining
+    if type(monsterId) ~= "string" then
+        return false, 0
+    end
+
+    local safeAmount = math.max(0, math.floor(tonumber(amount) or 0))
+    if safeAmount <= 0 then
+        return false, 0
+    end
+
+    local profile = getOrCreateProfile(player)
+    local fragments = ensureFragmentsTable(profile)
+    local current = tonumber(fragments[monsterId]) or 0
+
+    if current < safeAmount then
+        return false, current
+    end
+
+    local remaining = current - safeAmount
+    fragments[monsterId] = remaining
+    return true, remaining
+end
+
+function TeamManager.getUnlockedMonsters(player)
+    -- Propósito: Obtener la lista de IDs de Beastibits desbloqueados.
+    -- Precondiciones:
+    --   1. player debe ser instancia Player válida.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: table
+    local profile = getOrCreateProfile(player)
+    local list = {}
+    for monsterId, unlocked in pairs(profile.unlockedMonsters) do
+        if unlocked == true then
+            table.insert(list, monsterId)
+        end
+    end
+    return list
+end
+
+function TeamManager.getAllFragments(player)
+    -- Propósito: Obtener todos los fragmentos del jugador.
+    -- Precondiciones:
+    --   1. player debe ser instancia Player válida.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: table
+    local profile = getOrCreateProfile(player)
+    local fragments = ensureFragmentsTable(profile)
+    local copy = {}
+    for monsterId, amount in pairs(fragments) do
+        if amount > 0 then
+            copy[monsterId] = amount
+        end
+    end
+    return copy
+end
+
+function TeamManager.getProfileData(player)
+    -- Propósito: Obtener datos del perfil para persistencia.
+    -- Precondiciones:
+    --   1. player debe ser instancia Player válida.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: table, table
+    local profile = getOrCreateProfile(player)
+    local unlockedMonsters = {}
+    for monsterId, unlocked in pairs(profile.unlockedMonsters) do
+        if unlocked == true then
+            unlockedMonsters[monsterId] = true
+        end
+    end
+    local fragments = {}
+    local fragsTable = ensureFragmentsTable(profile)
+    for monsterId, amount in pairs(fragsTable) do
+        if amount > 0 then
+            fragments[monsterId] = amount
+        end
+    end
+    return unlockedMonsters, fragments
 end
 
 function TeamManager.calculateTeamHP(team)

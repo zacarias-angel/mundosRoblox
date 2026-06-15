@@ -56,7 +56,7 @@ Ultima actualizacion: 2026-06-13
 - [ ] Mostrar Shield Charges en UI
 
 #### Prioridad baja
-- [ ] Crear ModuleScripts en Studio: BackpackDataStore, FragmentsData, SpawnMatrix
+- [X] Crear ModuleScripts en Studio: BackpackDataStore, FragmentsData, SpawnMatrix
 - [ ] Agregar iconos/imagenes reales a los Beastibit nuevos
 - [ ] Mejorar feedback visual de captura (exito/fallo) en pantalla de resultado
 - [ ] Separar CombatServer en submodulos

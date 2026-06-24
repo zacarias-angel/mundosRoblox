@@ -10,6 +10,36 @@ local MonstersData = require(GameData:WaitForChild("MonstersData"))
 local TeamManager = {}
 
 local TEAM_SIZE = 5
+local MAX_EVOLUTION = 3
+
+local EVOLUTION_COST = {
+	[1] = { bits = 500, minerals = 10 },
+	[2] = { bits = 2500, minerals = 30 },
+}
+
+local XP_BY_RARITY = {
+	common = 10,
+	rare = 25,
+	epic = 60,
+	legendary = 150,
+}
+
+local EVO_XP_MULTIPLIER = {
+	[1] = 1.0,
+	[2] = 1.75,
+	[3] = 3.0,
+}
+
+local ELEMENT_EVOLUTION_MINERAL = {
+	Fuego = "Magma Core",
+	Agua = "Aqua Shard",
+	Planta = "Root Crystal",
+	Electricidad = "Volt Core",
+	Roca = "Stone Heart",
+}
+
+local MINERAL_ATTRIBUTE_PREFIX = "Mineral_"
+local BITS_ATTRIBUTE_NAME = "Bits"
 
 local playerProfiles = {}
 
@@ -165,11 +195,84 @@ local function ensureBackpackHasTeamMonsters(backpack, team)
     end
 end
 
+local function ensureEvolutionsTable(profile)
+    if type(profile.monsterEvolutions) ~= "table" then
+        profile.monsterEvolutions = {}
+    end
+    return profile.monsterEvolutions
+end
+
+local function ensureXPTable(profile)
+    if type(profile.monsterXP) ~= "table" then
+        profile.monsterXP = {}
+    end
+    return profile.monsterXP
+end
+
+local function getMonsterEvoInProfile(profile, monsterId)
+    local evolutions = ensureEvolutionsTable(profile)
+    return math.clamp(math.floor(tonumber(evolutions[monsterId]) or 1), 1, MAX_EVOLUTION)
+end
+
+local function getMonsterXPInProfile(profile, monsterId)
+    local xp = ensureXPTable(profile)
+    return math.max(0, math.floor(tonumber(xp[monsterId]) or 0))
+end
+
+local function getEvolutionMineralForMonster(monsterId)
+    local data = MonstersData[monsterId]
+    if not data then
+        return nil
+    end
+    local element = data.Element
+    if type(element) == "string" and ELEMENT_EVOLUTION_MINERAL[element] then
+        return ELEMENT_EVOLUTION_MINERAL[element]
+    end
+    return nil
+end
+
+local function getPlayerMineralCount(player, mineralName)
+    if type(mineralName) ~= "string" then
+        return 0
+    end
+    local attrName = MINERAL_ATTRIBUTE_PREFIX .. mineralName
+    return math.max(0, math.floor(tonumber(player:GetAttribute(attrName)) or 0))
+end
+
+local function spendPlayerMineral(player, mineralName, amount)
+    if type(mineralName) ~= "string" or amount <= 0 then
+        return false
+    end
+    local attrName = MINERAL_ATTRIBUTE_PREFIX .. mineralName
+    local current = getPlayerMineralCount(player, mineralName)
+    if current < amount then
+        return false
+    end
+    player:SetAttribute(attrName, current - amount)
+    return true
+end
+
+local function getPlayerBits(player)
+    return math.max(0, math.floor(tonumber(player:GetAttribute(BITS_ATTRIBUTE_NAME)) or 0))
+end
+
+local function spendPlayerBits(player, amount)
+    if amount <= 0 then
+        return false
+    end
+    local current = getPlayerBits(player)
+    if current < amount then
+        return false
+    end
+    player:SetAttribute(BITS_ATTRIBUTE_NAME, current - amount)
+    return true
+end
+
 local function getOrCreateProfile(player, savedData)
-    -- Propósito: Obtener o inicializar perfil en memoria del jugador (equipo, mochila, seguidor, fragmentos).
+    -- Propósito: Obtener o inicializar perfil en memoria del jugador (equipo, mochila, seguidor, fragmentos, evoluciones, XP).
     -- Precondiciones:
     --   1. player debe ser instancia Player válida.
-    --   2. savedData puede ser nil o tabla con unlockedMonsters y fragments.
+    --   2. savedData puede ser nil o tabla con unlockedMonsters, fragments, bits, minerals, monsterEvolutions, monsterXP.
     -- Ubicación: ServerScriptService/Combat/TeamManager
     -- Retorna: table
     local existing = playerProfiles[player]
@@ -183,6 +286,8 @@ local function getOrCreateProfile(player, savedData)
 
     local unlockedMonsters = {}
     local fragments = {}
+    local monsterEvolutions = {}
+    local monsterXP = {}
 
     if type(savedData) == "table" then
         if type(savedData.unlockedMonsters) == "table" then
@@ -202,6 +307,23 @@ local function getOrCreateProfile(player, savedData)
                 end
             end
         end
+        if type(savedData.monsterEvolutions) == "table" then
+            for monsterId, evo in pairs(savedData.monsterEvolutions) do
+                if MonstersData[monsterId] then
+                    monsterEvolutions[monsterId] = math.clamp(math.floor(tonumber(evo) or 1), 1, MAX_EVOLUTION)
+                end
+            end
+        end
+        if type(savedData.monsterXP) == "table" then
+            for monsterId, xp in pairs(savedData.monsterXP) do
+                if MonstersData[monsterId] then
+                    local safeXP = math.max(0, math.floor(tonumber(xp) or 0))
+                    if safeXP > 0 then
+                        monsterXP[monsterId] = safeXP
+                    end
+                end
+            end
+        end
     end
 
     for _, item in ipairs(backpack) do
@@ -216,6 +338,8 @@ local function getOrCreateProfile(player, savedData)
         selectedFollowerMonsterId = chooseDefaultFollowerMonsterId(backpack, defaultTeam),
         unlockedMonsters = unlockedMonsters,
         fragments = fragments,
+        monsterEvolutions = monsterEvolutions,
+        monsterXP = monsterXP,
     }
 
     playerProfiles[player] = profile
@@ -519,7 +643,7 @@ function TeamManager.getProfileData(player)
     -- Precondiciones:
     --   1. player debe ser instancia Player válida.
     -- Ubicación: ServerScriptService/Combat/TeamManager
-    -- Retorna: table, table
+    -- Retorna: table, table, number, table, table, table
     local profile = getOrCreateProfile(player)
     local unlockedMonsters = {}
     for monsterId, unlocked in pairs(profile.unlockedMonsters) do
@@ -534,7 +658,202 @@ function TeamManager.getProfileData(player)
             fragments[monsterId] = amount
         end
     end
-    return unlockedMonsters, fragments
+    local bits = getPlayerBits(player)
+    local minerals = {}
+    for mineralName in pairs(ELEMENT_EVOLUTION_MINERAL) do
+        local realName = ELEMENT_EVOLUTION_MINERAL[mineralName]
+        local count = getPlayerMineralCount(player, realName)
+        if count > 0 then
+            minerals[realName] = count
+        end
+    end
+    local evoTable = ensureEvolutionsTable(profile)
+    local evolutions = {}
+    for monsterId, evo in pairs(evoTable) do
+        if evo > 1 then
+            evolutions[monsterId] = evo
+        end
+    end
+    local xpTable = ensureXPTable(profile)
+    local xp = {}
+    for monsterId, amount in pairs(xpTable) do
+        if amount > 0 then
+            xp[monsterId] = amount
+        end
+    end
+    return unlockedMonsters, fragments, bits, minerals, evolutions, xp
+end
+
+function TeamManager.getMonsterEvolution(player, monsterId)
+    if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
+        return 1
+    end
+    local profile = getOrCreateProfile(player)
+    return getMonsterEvoInProfile(profile, monsterId)
+end
+
+function TeamManager.getMonsterXP(player, monsterId)
+    if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
+        return 0
+    end
+    local profile = getOrCreateProfile(player)
+    return getMonsterXPInProfile(profile, monsterId)
+end
+
+function TeamManager.evolveMonster(player, monsterId)
+    -- Propósito: Evolucionar un Beastibit desbloqueado gastando Bits y minerales.
+    -- Precondiciones:
+    --   1. monsterId debe estar desbloqueado.
+    --   2. No puede estar en evolucion maxima (3).
+    --   3. Debe tener suficientes Bits y minerales.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: boolean success, string reason, number newEvo
+    if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
+        return false, "monster-data-missing", 1
+    end
+
+    local profile = getOrCreateProfile(player)
+    if not isMonsterUnlockedInBackpack(profile.backpack, monsterId) then
+        return false, "monster-locked", 1
+    end
+
+    local currentEvo = getMonsterEvoInProfile(profile, monsterId)
+    if currentEvo >= MAX_EVOLUTION then
+        return false, "max-evolution", currentEvo
+    end
+
+    local cost = EVOLUTION_COST[currentEvo]
+    if not cost then
+        return false, "no-cost-defined", currentEvo
+    end
+
+    local mineralName = getEvolutionMineralForMonster(monsterId)
+    if not mineralName then
+        return false, "no-mineral-mapping", currentEvo
+    end
+
+    if not spendPlayerBits(player, cost.bits) then
+        return false, "insufficient-bits", currentEvo
+    end
+
+    if not spendPlayerMineral(player, mineralName, cost.minerals) then
+        player:SetAttribute(BITS_ATTRIBUTE_NAME, getPlayerBits(player) + cost.bits)
+        return false, "insufficient-minerals", currentEvo
+    end
+
+    local newEvo = currentEvo + 1
+    ensureEvolutionsTable(profile)[monsterId] = newEvo
+    return true, "ok", newEvo
+end
+
+function TeamManager.feedMonster(player, targetMonsterId, foodMonsterId)
+    -- Propósito: Alimentar un Beastibit con otro Beastibit duplicado para ganar XP.
+    -- Precondiciones:
+    --   1. Ambos deben estar desbloqueados.
+    --   2. No se puede alimentar a si mismo.
+    --   3. No se puede sacrificar el que esta en el equipo activo.
+    --   4. foodMonsterId se elimina del perfil del jugador.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: boolean success, string reason, number xpGained, number newXP
+    if type(targetMonsterId) ~= "string" or type(foodMonsterId) ~= "string" then
+        return false, "invalid-monster-ids", 0, 0
+    end
+
+    if targetMonsterId == foodMonsterId then
+        return false, "cannot-feed-self", 0, 0
+    end
+
+    if MonstersData[targetMonsterId] == nil or MonstersData[foodMonsterId] == nil then
+        return false, "monster-data-missing", 0, 0
+    end
+
+    local profile = getOrCreateProfile(player)
+
+    if not isMonsterUnlockedInBackpack(profile.backpack, targetMonsterId) then
+        return false, "target-locked", 0, 0
+    end
+
+    if not isMonsterUnlockedInBackpack(profile.backpack, foodMonsterId) then
+        return false, "food-locked", 0, 0
+    end
+
+    for _, pet in ipairs(profile.duelTeam) do
+        if pet.MonsterId == foodMonsterId then
+            return false, "food-in-team", 0, 0
+        end
+    end
+
+    if profile.selectedFollowerMonsterId == foodMonsterId then
+        return false, "food-is-follower", 0, 0
+    end
+
+    local foodData = MonstersData[foodMonsterId]
+    local rarityKey = type(foodData.Rarity) == "string" and string.lower(foodData.Rarity) or "common"
+    local xpBase = XP_BY_RARITY[rarityKey] or 10
+
+    local foodEvo = getMonsterEvoInProfile(profile, foodMonsterId)
+    local evoMult = EVO_XP_MULTIPLIER[foodEvo] or 1.0
+
+    local xpGained = math.floor(xpBase * evoMult)
+
+    profile.unlockedMonsters[foodMonsterId] = nil
+    for i, item in ipairs(profile.backpack) do
+        if item.MonsterId == foodMonsterId then
+            item.Unlocked = false
+            break
+        end
+    end
+
+    local xpTable = ensureXPTable(profile)
+    local currentXP = getMonsterXPInProfile(profile, targetMonsterId)
+    local newXP = currentXP + xpGained
+    xpTable[targetMonsterId] = newXP
+
+    if profile.selectedFollowerMonsterId == foodMonsterId then
+        profile.selectedFollowerMonsterId = chooseDefaultFollowerMonsterId(profile.backpack, profile.duelTeam)
+    end
+
+    return true, "ok", xpGained, newXP
+end
+
+function TeamManager.craftMonster(player, monsterId)
+    -- Propósito: Craftear un Beastibit gastando fragmentos acumulados.
+    -- Precondiciones:
+    --   1. monsterId debe existir en MonstersData.
+    --   2. Debe tener suficientes fragmentos segun su rareza.
+    -- Ubicación: ServerScriptService/Combat/TeamManager
+    -- Retorna: boolean success, string reason
+    if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
+        return false, "monster-data-missing"
+    end
+
+    local profile = getOrCreateProfile(player)
+    if isMonsterUnlockedInBackpack(profile.backpack, monsterId) then
+        return false, "already-unlocked"
+    end
+
+    local data = MonstersData[monsterId]
+    local rarityKey = type(data.Rarity) == "string" and string.lower(data.Rarity) or "common"
+
+    local FragmentsDataModule = game:GetService("ReplicatedStorage"):WaitForChild("GameData"):FindFirstChild("FragmentsData")
+    local craftCost = 999
+    if FragmentsDataModule then
+        local FragmentsData = require(FragmentsDataModule)
+        craftCost = FragmentsData.getFragmentCraftCost(rarityKey)
+    end
+
+    local currentFragments = TeamManager.getFragments(player, monsterId)
+    if currentFragments < craftCost then
+        return false, "insufficient-fragments"
+    end
+
+    local spentOk, remaining = TeamManager.spendFragments(player, monsterId, craftCost)
+    if not spentOk then
+        return false, "spend-failed"
+    end
+
+    TeamManager.unlockMonster(player, monsterId)
+    return true, "ok"
 end
 
 function TeamManager.calculateTeamHP(team)

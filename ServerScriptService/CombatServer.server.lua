@@ -909,7 +909,10 @@ local function endDuel(duel, winner, reason)
     end
 
     if winner and loser and reason == "hp-depleted" then
-        local winnerStars, loserStars = PvpStarsService.applyPvpDuelResult(winner, loser)
+        local winnerStars, loserStars, shieldUsed = PvpStarsService.applyPvpDuelResult(winner, loser)
+        local loserTitle = PvpStarsService.getTitleForPlayer(loser)
+        local loserShields = PvpStarsService.getShieldCharges(loser)
+        local winnerTitle = PvpStarsService.getTitleForPlayer(winner)
         dbg(
             "duelo finalizado: "
             .. winner.Name
@@ -923,6 +926,7 @@ local function endDuel(duel, winner, reason)
             .. loser.Name
             .. ":"
             .. tostring(loserStars)
+            .. (shieldUsed and " [SHIELD]" or "")
         )
         sendDuelState(winner, {
             type = "duel-ended",
@@ -931,6 +935,7 @@ local function endDuel(duel, winner, reason)
             reason = "hp-depleted",
             newSelfStars = winnerStars,
             starsDelta = 1,
+            selfTitle = winnerTitle,
         })
         sendDuelState(loser, {
             type = "duel-ended",
@@ -938,7 +943,10 @@ local function endDuel(duel, winner, reason)
             opponentUserId = winner.UserId,
             reason = "hp-depleted",
             newSelfStars = loserStars,
-            starsDelta = -1,
+            starsDelta = shieldUsed and 0 or -1,
+            shieldUsed = shieldUsed,
+            selfTitle = loserTitle,
+            shieldCharges = loserShields,
         })
         return
     end
@@ -1987,7 +1995,7 @@ local function onCombatChallengeResponse(player, payload)
 end
 
 local function sendRosterState(player, reason)
-    -- Propósito: Enviar al cliente el estado actual de mochila, seguidor, equipo de duelo y fragmentos.
+    -- Propósito: Enviar al cliente el estado actual de mochila, seguidor, equipo de duelo, fragmentos, evoluciones, XP, titulo y shields.
     -- Precondiciones:
     --   1. player debe ser instancia Player válida.
     -- Ubicación: ServerScriptService/CombatServer
@@ -2002,6 +2010,19 @@ local function sendRosterState(player, reason)
     local selectedFollowerMonsterId = TeamManager.getSelectedFollowerMonsterId(player)
     local allFragments = TeamManager.getAllFragments(player)
 
+    local evolutions = {}
+    local xp = {}
+    for _, item in ipairs(backpack) do
+        if item.Unlocked == true then
+            evolutions[item.MonsterId] = TeamManager.getMonsterEvolution(player, item.MonsterId)
+            xp[item.MonsterId] = TeamManager.getMonsterXP(player, item.MonsterId)
+        end
+    end
+
+    local shieldCharges = PvpStarsService.getShieldCharges(player)
+    local pvpTitle = PvpStarsService.getTitleForPlayer(player)
+    local stars = PvpStarsService.getStars(player)
+
     state.team = team
     state.backpack = backpack
     state.followMonsterId = selectedFollowerMonsterId
@@ -2013,6 +2034,11 @@ local function sendRosterState(player, reason)
         backpack = backpack,
         selectedFollowerMonsterId = selectedFollowerMonsterId,
         fragments = allFragments,
+        evolutions = evolutions,
+        monsterXP = xp,
+        shieldCharges = shieldCharges,
+        pvpTitle = pvpTitle,
+        pvpStars = stars,
     })
 end
 
@@ -2112,6 +2138,55 @@ local function onCombatRosterAction(player, payload)
 
     if payload.action == "set-duel-slot" then
         applyDuelSlotSelection(player, payload)
+        return
+    end
+
+    if payload.action == "evolve" then
+        if type(payload.monsterId) ~= "string" then
+            sendDuelState(player, { type = "roster-error", reason = "invalid-monster-id" })
+            return
+        end
+        local success, reason, newEvo = TeamManager.evolveMonster(player, payload.monsterId)
+        if not success then
+            sendDuelState(player, { type = "roster-error", reason = reason or "evolve-failed" })
+            return
+        end
+        sendRosterState(player, "evolved")
+        return
+    end
+
+    if payload.action == "feed" then
+        if type(payload.targetMonsterId) ~= "string" or type(payload.foodMonsterId) ~= "string" then
+            sendDuelState(player, { type = "roster-error", reason = "invalid-monster-ids" })
+            return
+        end
+        local success, reason, xpGained, newXP = TeamManager.feedMonster(player, payload.targetMonsterId, payload.foodMonsterId)
+        if not success then
+            sendDuelState(player, { type = "roster-error", reason = reason or "feed-failed" })
+            return
+        end
+        sendDuelState(player, {
+            type = "feed-result",
+            targetMonsterId = payload.targetMonsterId,
+            foodMonsterId = payload.foodMonsterId,
+            xpGained = xpGained,
+            newXP = newXP,
+        })
+        sendRosterState(player, "fed")
+        return
+    end
+
+    if payload.action == "craft" then
+        if type(payload.monsterId) ~= "string" then
+            sendDuelState(player, { type = "roster-error", reason = "invalid-monster-id" })
+            return
+        end
+        local success, reason = TeamManager.craftMonster(player, payload.monsterId)
+        if not success then
+            sendDuelState(player, { type = "roster-error", reason = reason or "craft-failed" })
+            return
+        end
+        sendRosterState(player, "crafted")
         return
     end
 
@@ -2429,13 +2504,28 @@ Players.PlayerAdded:Connect(function(player)
     local savedData = BackpackDataStore.loadPlayerData(player)
     TeamManager.initializePlayer(player, savedData)
     PvpStarsService.onPlayerAdded(player)
+
+    if type(savedData) == "table" then
+        if type(savedData.bits) == "number" then
+            player:SetAttribute(BITS_ATTRIBUTE_NAME, math.max(0, math.floor(savedData.bits)))
+        end
+        if type(savedData.minerals) == "table" then
+            for mineralName, count in pairs(savedData.minerals) do
+                local safeCount = math.max(0, math.floor(tonumber(count) or 0))
+                if safeCount > 0 then
+                    player:SetAttribute("Mineral_" .. mineralName, safeCount)
+                end
+            end
+        end
+    end
+
     initPlayerState(player)
     bindCharacterSpawn(player)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
-    local unlockedMonsters, fragments = TeamManager.getProfileData(player)
-    BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments)
+    local unlockedMonsters, fragments, bits, minerals, evolutions, xp = TeamManager.getProfileData(player)
+    BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, evolutions, xp)
     PvpStarsService.onPlayerRemoving(player)
     cleanPlayerState(player)
 end)
@@ -2449,6 +2539,21 @@ for _, player in ipairs(Players:GetPlayers()) do
     local savedData = BackpackDataStore.loadPlayerData(player)
     TeamManager.initializePlayer(player, savedData)
     PvpStarsService.onPlayerAdded(player)
+
+    if type(savedData) == "table" then
+        if type(savedData.bits) == "number" then
+            player:SetAttribute(BITS_ATTRIBUTE_NAME, math.max(0, math.floor(savedData.bits)))
+        end
+        if type(savedData.minerals) == "table" then
+            for mineralName, count in pairs(savedData.minerals) do
+                local safeCount = math.max(0, math.floor(tonumber(count) or 0))
+                if safeCount > 0 then
+                    player:SetAttribute("Mineral_" .. mineralName, safeCount)
+                end
+            end
+        end
+    end
+
     if not playerStates[player] then
         initPlayerState(player)
     end
@@ -2487,3 +2592,18 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
 
     onMonsterChallenged(player, monsterModel)
 end)
+
+-- ============================================================
+-- SHIELD REGEN LOOP
+-- ============================================================
+local function runShieldRegenLoop()
+    while true do
+        task.wait(30)
+        local now = os.time()
+        for _, player in ipairs(Players:GetPlayers()) do
+            PvpStarsService.applyShieldRegen(player, now)
+        end
+    end
+end
+
+task.spawn(runShieldRegenLoop)

@@ -25,6 +25,11 @@ local selectedFollowerMonsterId = nil
 local selectedBackpackMonsterId = nil
 local duelActive = false
 local rosterFragments = {}
+local rosterEvolutions = {}
+local rosterXP = {}
+local playerPvpTitle = "Rookie"
+local playerShieldCharges = 0
+local playerPvpStars = 0
 
 local OVERLAY_W = 780
 local OVERLAY_H = 480
@@ -87,6 +92,21 @@ headerTitle.TextColor3 = Color3.fromRGB(255, 240, 160)
 headerTitle.Text = "Dashboard"
 headerTitle.ZIndex = 71
 headerTitle.Parent = rosterOverlay
+
+-- PvP Info line
+local pvpInfoLabel = Instance.new("TextLabel")
+pvpInfoLabel.Name = "PvpInfo"
+pvpInfoLabel.AnchorPoint = Vector2.new(1, 0)
+pvpInfoLabel.Position = UDim2.new(1, -90, 0, 12)
+pvpInfoLabel.Size = UDim2.new(0, 220, 0, 20)
+pvpInfoLabel.BackgroundTransparency = 1
+pvpInfoLabel.Font = Enum.Font.GothamBold
+pvpInfoLabel.TextSize = 13
+pvpInfoLabel.TextXAlignment = Enum.TextXAlignment.Right
+pvpInfoLabel.TextColor3 = Color3.fromRGB(255, 230, 100)
+pvpInfoLabel.Text = ""
+pvpInfoLabel.ZIndex = 71
+pvpInfoLabel.Parent = rosterOverlay
 
 -- ============================================================
 -- CLOSE BUTTON
@@ -998,9 +1018,22 @@ local function buildCraftTab()
 	craftDetailEvo.ZIndex = 74
 	craftDetailEvo.Parent = craftDetailFrame
 
+	local craftDetailXP = Instance.new("TextLabel")
+	craftDetailXP.Name = "CraftDetailXP"
+	craftDetailXP.Position = UDim2.new(0, 100, 0, 58)
+	craftDetailXP.Size = UDim2.new(1, -112, 0, 18)
+	craftDetailXP.BackgroundTransparency = 1
+	craftDetailXP.Font = Enum.Font.Gotham
+	craftDetailXP.TextSize = 12
+	craftDetailXP.TextXAlignment = Enum.TextXAlignment.Left
+	craftDetailXP.TextColor3 = Color3.fromRGB(160, 210, 130)
+	craftDetailXP.Text = "XP: 0"
+	craftDetailXP.ZIndex = 74
+	craftDetailXP.Parent = craftDetailFrame
+
 	local craftDetailFrags = Instance.new("TextLabel")
 	craftDetailFrags.Name = "CraftDetailFrags"
-	craftDetailFrags.Position = UDim2.new(0, 100, 0, 60)
+	craftDetailFrags.Position = UDim2.new(0, 100, 0, 76)
 	craftDetailFrags.Size = UDim2.new(1, -112, 0, 18)
 	craftDetailFrags.BackgroundTransparency = 1
 	craftDetailFrags.Font = Enum.Font.Gotham
@@ -1013,8 +1046,8 @@ local function buildCraftTab()
 
 	local craftDetailActions = Instance.new("Frame")
 	craftDetailActions.Name = "CraftDetailActions"
-	craftDetailActions.Position = UDim2.new(0, 12, 1, -80)
-	craftDetailActions.Size = UDim2.new(1, -24, 0, 68)
+	craftDetailActions.Position = UDim2.new(0, 12, 1, -120)
+	craftDetailActions.Size = UDim2.new(1, -24, 0, 108)
 	craftDetailActions.BackgroundTransparency = 1
 	craftDetailActions.ZIndex = 74
 	craftDetailActions.Parent = craftDetailFrame
@@ -1022,30 +1055,173 @@ local function buildCraftTab()
 	local evolveButton = Instance.new("TextButton")
 	evolveButton.Name = "EvolveButton"
 	evolveButton.Position = UDim2.new(0, 0, 0, 0)
-	evolveButton.Size = UDim2.new(1, 0, 0, 30)
+	evolveButton.Size = UDim2.new(1, 0, 0, 32)
 	evolveButton.BackgroundColor3 = Color3.fromRGB(160, 80, 200)
 	evolveButton.BorderSizePixel = 0
 	evolveButton.Font = Enum.Font.GothamBold
 	evolveButton.TextSize = 14
 	evolveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	evolveButton.Text = "Evolucionar (pendiente)"
+	evolveButton.Text = "Evolucionar (500 Bits + 10 minerales)"
 	evolveButton.ZIndex = 75
 	evolveButton.Parent = craftDetailActions
 	Instance.new("UICorner", evolveButton).CornerRadius = UDim.new(0, 7)
 
 	local feedButton = Instance.new("TextButton")
 	feedButton.Name = "FeedButton"
-	feedButton.Position = UDim2.new(0, 0, 0, 36)
-	feedButton.Size = UDim2.new(1, 0, 0, 30)
+	feedButton.Position = UDim2.new(0, 0, 0, 38)
+	feedButton.Size = UDim2.new(1, 0, 0, 32)
 	feedButton.BackgroundColor3 = Color3.fromRGB(180, 120, 40)
 	feedButton.BorderSizePixel = 0
 	feedButton.Font = Enum.Font.GothamBold
 	feedButton.TextSize = 14
 	feedButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	feedButton.Text = "Alimentar (pendiente)"
+	feedButton.Text = "Alimentar (sacrifica otro Beastibit)"
 	feedButton.ZIndex = 75
 	feedButton.Parent = craftDetailActions
 	Instance.new("UICorner", feedButton).CornerRadius = UDim.new(0, 7)
+
+	local craftButton = Instance.new("TextButton")
+	craftButton.Name = "CraftButton"
+	craftButton.Position = UDim2.new(0, 0, 0, 76)
+	craftButton.Size = UDim2.new(1, 0, 0, 32)
+	craftButton.BackgroundColor3 = Color3.fromRGB(80, 160, 100)
+	craftButton.BorderSizePixel = 0
+	craftButton.Font = Enum.Font.GothamBold
+	craftButton.TextSize = 14
+	craftButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	craftButton.Text = "Craftear con fragmentos"
+	craftButton.ZIndex = 75
+	craftButton.Parent = craftDetailActions
+	Instance.new("UICorner", craftButton).CornerRadius = UDim.new(0, 7)
+
+	-- Feed confirmation
+	local feedConfirmFrame = Instance.new("Frame")
+	feedConfirmFrame.Name = "FeedConfirmFrame"
+	feedConfirmFrame.Position = UDim2.new(0, 0, 1, -32)
+	feedConfirmFrame.Size = UDim2.new(1, 0, 0, 32)
+	feedConfirmFrame.BackgroundTransparency = 1
+	feedConfirmFrame.Visible = false
+	feedConfirmFrame.ZIndex = 76
+	feedConfirmFrame.Parent = craftDetailFrame
+
+	local feedConfirmText = Instance.new("TextLabel")
+	feedConfirmText.Name = "FeedConfirmText"
+	feedConfirmText.Position = UDim2.new(0, 0, 0, 0)
+	feedConfirmText.Size = UDim2.new(0.55, 0, 1, 0)
+	feedConfirmText.BackgroundTransparency = 1
+	feedConfirmText.Font = Enum.Font.GothamBold
+	feedConfirmText.TextSize = 11
+	feedConfirmText.TextXAlignment = Enum.TextXAlignment.Left
+	feedConfirmText.TextColor3 = Color3.fromRGB(255, 180, 80)
+	feedConfirmText.Text = "Selecciona un Beastibit para sacrificar:"
+	feedConfirmText.ZIndex = 77
+	feedConfirmText.Parent = feedConfirmFrame
+
+	local feedConfirmScroll = Instance.new("ScrollingFrame")
+	feedConfirmScroll.Name = "FeedConfirmScroll"
+	feedConfirmScroll.Position = UDim2.new(0, 0, 0, 36)
+	feedConfirmScroll.Size = UDim2.new(1, 0, 0, 56)
+	feedConfirmScroll.BackgroundColor3 = Color3.fromRGB(16, 18, 30)
+	feedConfirmScroll.BorderSizePixel = 0
+	feedConfirmScroll.CanvasSize = UDim2.new(0, 0, 0, 56)
+	feedConfirmScroll.ZIndex = 77
+	feedConfirmScroll.Visible = false
+	feedConfirmScroll.Parent = feedConfirmFrame
+	Instance.new("UICorner", feedConfirmScroll).CornerRadius = UDim.new(0, 6)
+
+	local feedConfirmGrid = Instance.new("UIGridLayout")
+	feedConfirmGrid.CellSize = UDim2.new(0, 48, 0, 48)
+	feedConfirmGrid.CellPadding = UDim2.new(0, 4, 0, 0)
+	feedConfirmGrid.FillDirection = Enum.FillDirection.Horizontal
+	feedConfirmGrid.FillDirectionMaxCells = 6
+	feedConfirmGrid.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	feedConfirmGrid.Parent = feedConfirmScroll
+
+	local feedConfirmButtons = {}
+	local feedConfirming = false
+
+	evolveButton.MouseButton1Click:Connect(function()
+		if not craftTargetMonsterId then return end
+		CombatRosterAction:FireServer({
+			action = "evolve",
+			monsterId = craftTargetMonsterId,
+		})
+	end)
+
+	feedButton.MouseButton1Click:Connect(function()
+		if not craftTargetMonsterId then return end
+		if feedConfirming then
+			feedConfirmFrame.Visible = false
+			feedConfirmScroll.Visible = false
+			feedConfirming = false
+			return
+		end
+		feedConfirming = true
+		feedConfirmFrame.Visible = true
+		feedConfirmScroll.Visible = true
+		-- Populate food options
+		for _, btn in ipairs(feedConfirmButtons) do
+			btn:Destroy()
+		end
+		feedConfirmButtons = {}
+		local idx = 0
+		for _, item in ipairs(rosterBackpack) do
+			if item.Unlocked == true and item.MonsterId ~= craftTargetMonsterId then
+				-- Exclude team and follower
+				local inTeam = false
+				for _, pet in ipairs(rosterDuelTeam) do
+					if pet and pet.MonsterId == item.MonsterId then
+						inTeam = true
+						break
+					end
+				end
+				if not inTeam and item.MonsterId ~= selectedFollowerMonsterId then
+					idx = idx + 1
+					local fb = Instance.new("ImageButton")
+					fb.Name = "FeedOpt_" .. item.MonsterId
+					fb.Size = UDim2.new(0, 48, 0, 48)
+					fb.LayoutOrder = idx
+					fb.BackgroundColor3 = Color3.fromRGB(160, 60, 40)
+					fb.BorderSizePixel = 0
+					fb.AutoButtonColor = true
+					fb.ZIndex = 78
+					fb.Parent = feedConfirmScroll
+					Instance.new("UICorner", fb).CornerRadius = UDim.new(0, 5)
+
+					local fbIcon = Instance.new("ImageLabel")
+					fbIcon.Name = "Icon"
+					fbIcon.Position = UDim2.new(0, 4, 0, 4)
+					fbIcon.Size = UDim2.new(1, -8, 1, -8)
+					fbIcon.BackgroundTransparency = 1
+					fbIcon.Image = getMonsterImage(item.MonsterId)
+					fbIcon.ZIndex = 79
+					fbIcon.Parent = fb
+
+					local foodMonsterId = item.MonsterId
+					fb.MouseButton1Click:Connect(function()
+						CombatRosterAction:FireServer({
+							action = "feed",
+							targetMonsterId = craftTargetMonsterId,
+							foodMonsterId = foodMonsterId,
+						})
+						feedConfirming = false
+						feedConfirmFrame.Visible = false
+						feedConfirmScroll.Visible = false
+					end)
+					table.insert(feedConfirmButtons, fb)
+				end
+			end
+		end
+		feedConfirmScroll.CanvasSize = UDim2.new(0, math.max(48, idx * 52), 0, 56)
+	end)
+
+	craftButton.MouseButton1Click:Connect(function()
+		if not craftTargetMonsterId then return end
+		CombatRosterAction:FireServer({
+			action = "craft",
+			monsterId = craftTargetMonsterId,
+		})
+	end)
 
 	tabRefreshers["Craft"] = function()
 		for _, btn in ipairs(craftTargetButtons) do
@@ -1098,10 +1274,77 @@ local function buildCraftTab()
 				btn.MouseButton1Click:Connect(function()
 					craftTargetMonsterId = monsterId
 					local fragCount = rosterFragments[monsterId] or 0
+					local evo = rosterEvolutions[monsterId] or 1
+					local xp = rosterXP[monsterId] or 0
 					craftDetailIcon.Image = getMonsterImage(monsterId)
 					craftDetailName.Text = getMonsterDisplayName(monsterId)
-					craftDetailEvo.Text = "Evolucion actual: 1 / 3"
+					craftDetailEvo.Text = "Evolucion actual: " .. tostring(evo) .. " / 3"
+					craftDetailXP.Text = "XP acumulada: " .. tostring(xp)
 					craftDetailFrags.Text = "Fragmentos: " .. tostring(fragCount)
+					tabRefreshers["Craft"]()
+				end)
+
+				table.insert(craftTargetButtons, btn)
+			end
+		end
+
+		-- Show unlocked monsters with fragments > 0 that are not yet unlocked
+		local unlockedSet = {}
+		for _, item in ipairs(rosterBackpack) do
+			if item.Unlocked == true then
+				unlockedSet[item.MonsterId] = true
+			end
+		end
+		for monsterId, fragCount in pairs(rosterFragments) do
+			if fragCount > 0 and not unlockedSet[monsterId] and MonstersData[monsterId] then
+				idx = idx + 1
+				local isTarget = craftTargetMonsterId == monsterId
+
+				local btn = Instance.new("ImageButton")
+				btn.Name = "CraftSel_" .. monsterId
+				btn.Size = UDim2.new(0, 74, 0, 74)
+				btn.LayoutOrder = idx
+				btn.BackgroundColor3 = isTarget and Color3.fromRGB(74, 118, 176) or Color3.fromRGB(30, 38, 58)
+				btn.BorderSizePixel = 0
+				btn.AutoButtonColor = true
+				btn.ZIndex = 74
+				btn.Parent = craftSelectionScroll
+				Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+
+				local cIcon = Instance.new("ImageLabel")
+				cIcon.Name = "Icon"
+				cIcon.Position = UDim2.new(0, 5, 0, 5)
+				cIcon.Size = UDim2.new(1, -10, 1, -30)
+				cIcon.BackgroundTransparency = 1
+				cIcon.Image = getMonsterImage(monsterId)
+				cIcon.ImageColor3 = Color3.fromRGB(80, 80, 80)
+				cIcon.ZIndex = 75
+				cIcon.Parent = btn
+
+				local cName = Instance.new("TextLabel")
+				cName.Name = "Name"
+				cName.AnchorPoint = Vector2.new(0.5, 1)
+				cName.Position = UDim2.new(0.5, 0, 1, -4)
+				cName.Size = UDim2.new(1, -8, 0, 20)
+				cName.BackgroundTransparency = 0.25
+				cName.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				cName.Font = Enum.Font.GothamBold
+				cName.TextSize = 8
+				cName.TextColor3 = Color3.fromRGB(180, 180, 180)
+				cName.Text = getMonsterDisplayName(monsterId) .. " (" .. tostring(fragCount) .. " frags)"
+				cName.ZIndex = 76
+				cName.Parent = btn
+				Instance.new("UICorner", cName).CornerRadius = UDim.new(0, 4)
+
+				btn.MouseButton1Click:Connect(function()
+					craftTargetMonsterId = monsterId
+					local fragCount2 = rosterFragments[monsterId] or 0
+					craftDetailIcon.Image = getMonsterImage(monsterId)
+					craftDetailIcon.ImageColor3 = Color3.fromRGB(80, 80, 80)
+					craftDetailName.Text = getMonsterDisplayName(monsterId) .. " (no desbloqueado)"
+					craftDetailEvo.Text = "Disponible por craft"
+					craftDetailXP.Text = "Fragmentos necesarios: ver rareza"
+					craftDetailFrags.Text = "Tienes: " .. tostring(fragCount2)
 					tabRefreshers["Craft"]()
 				end)
 
@@ -1163,10 +1406,26 @@ local function applyRosterState(data)
 	rosterBackpack = type(data.backpack) == "table" and data.backpack or rosterBackpack
 	rosterDuelTeam = type(data.duelTeam) == "table" and data.duelTeam or rosterDuelTeam
 	rosterFragments = type(data.fragments) == "table" and data.fragments or rosterFragments
+	rosterEvolutions = type(data.evolutions) == "table" and data.evolutions or rosterEvolutions
+	rosterXP = type(data.monsterXP) == "table" and data.monsterXP or rosterXP
 
 	if type(data.selectedFollowerMonsterId) == "string" then
 		selectedFollowerMonsterId = data.selectedFollowerMonsterId
 	end
+
+	if type(data.pvpTitle) == "string" then
+		playerPvpTitle = data.pvpTitle
+	end
+
+	if type(data.shieldCharges) == "number" then
+		playerShieldCharges = data.shieldCharges
+	end
+
+	if type(data.pvpStars) == "number" then
+		playerPvpStars = data.pvpStars
+	end
+
+	pvpInfoLabel.Text = "Estrellas: " .. tostring(playerPvpStars) .. " | " .. playerPvpTitle .. " | Shields: " .. tostring(playerShieldCharges)
 
 	if not selectedBackpackMonsterId and selectedFollowerMonsterId then
 		selectedBackpackMonsterId = selectedFollowerMonsterId
@@ -1205,6 +1464,11 @@ local function handleDuelState(data)
 	end
 
 	if data.type == "roster-error" then
+		return
+	end
+
+	if data.type == "feed-result" then
+		requestRosterSync()
 		return
 	end
 

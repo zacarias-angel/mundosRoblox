@@ -1,6 +1,6 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-06-13
+Fecha de actualizacion: 2026-06-23
 
 Terminologia oficial:
 
@@ -301,44 +301,93 @@ Nota de estado:
 - Afinar posicion exacta final del contador en todos los rigs (R6/R15, escalas distintas).
 - Preparar capa VFX de estrellas (particulas, glow, feedback al subir/bajar).
 - Considerar anti-spam y protecciones de write para DataStore a gran escala.
-- Definir tabla final de titulos por hitos de estrellas.
-- Definir fuentes y limites de Shield Charges para no congelar la ladder.
+- [X] Definir tabla final de titulos por hitos de estrellas.
+- [X] Definir fuentes y limites de Shield Charges para no congelar la ladder.
 
-## 7.7 Economia de captura y progresion Beastibit (APLICADO - Fase 1)
+## 7.3 Economia de captura y progresion Beastibit (FASE 2 - APLICADO)
 
 - [X] Cerrar nombre final del recurso de captura: ELIMINADO (sin recurso externo, captura directa).
 - [X] Cerrar tabla numerica de drops: fragmentos + minerales implementados.
 - [X] Persistencia de inventario Beastibit con DataStore BackpackV1.
 - [X] Sistema de captura directa con pity por rareza.
-- [ ] Cerrar tabla de XP por rareza para comida con duplicados (pendiente fase 2).
-- [ ] Cerrar costos de evolucion por planeta (minerales especificos + Bits) (pendiente fase 2).
-- [ ] Confirmar protecciones de seguridad para Beastibit favoritos/equipo/historia en alimentacion (pendiente fase 2).
+- [X] Cerrar tabla de XP por rareza para comida con duplicados (comun 10, raro 25, epico 60, legendario 150).
+- [X] Cerrar costos de evolucion por planeta: 500/2500 Bits + 10/30 minerales.
+- [X] Confirmar protecciones de seguridad para Beastibit favoritos/equipo/historia en alimentacion (equipo y seguidor protegidos).
 
-## 7.3 Gravedad planetaria
+## 7.4 Sistema de evolucion (FASE 2 - NUEVO)
+
+Estado: IMPLEMENTADO
+
+Archivo principal: ServerScriptService/Combat/TeamManager.lua
+
+- Funcion evolveMonster con validaciones.
+- Costos por etapa: Evo 1->2 (500 Bits + 10 minerales), Evo 2->3 (2500 Bits + 30 minerales).
+- Mineral de evolucion mapeado por elemento: Fuego=Magma Core, Agua=Aqua Shard, Planta=Root Crystal, Electricidad=Volt Core, Roca=Stone Heart.
+- Maximo 3 evoluciones por Beastibit.
+- Tracking individual de nivel de evolucion por especie en perfil y DataStore.
+
+## 7.5 Sistema de alimentacion y XP (FASE 2 - NUEVO)
+
+Estado: IMPLEMENTADO
+
+Archivo principal: ServerScriptService/Combat/TeamManager.lua
+
+- Funcion feedMonster: sacrifica un Beastibit para dar XP a otro.
+- XP base por rareza del alimento: Comun 10, Raro 25, Epico 60, Legendario 150.
+- Multiplicador por evolucion del alimento: Evo1 x1.0, Evo2 x1.75, Evo3 x3.0.
+- Protecciones: no se puede sacrificar equipo activo ni seguidor.
+- Confirmacion visual en UI antes de sacrificar (overlay de seleccion).
+- XP persistida en DataStore BackpackV1.
+
+## 7.6 Sistema de craft por fragmentos (FASE 2 - NUEVO)
+
+Estado: IMPLEMENTADO
+
+Archivo principal: ServerScriptService/Combat/TeamManager.lua
+
+- Funcion craftMonster: gasta fragmentos para desbloquear Beastibit.
+- Costos: Comun 30, Raro 80, Epico 150 fragmentos.
+- Beastibits no desbloqueados con fragmentos se muestran en tab Craft.
+- Boton de craftear conectado en UI.
+
+## 7.7 PvP - Titulos y Shield Charges (FASE 2 - NUEVO)
+
+Estado: IMPLEMENTADO
+
+Archivo principal: ServerScriptService/Combat/PvpStarsService.lua
+
+- Titulos PvP: Rookie (0), Hunter (10), Tamer (25), Elite (50), Master (100), Legend (200), Bitlord (500).
+- Shield Charges: max 3, regenera 1 diario + 1 semanal.
+- Al perder PvP, si hay shield disponible se consume (no se pierden estrellas).
+- Loop de regeneracion de shields cada 30s en CombatServer.
+- Titulo y shields visibles en header del Dashboard.
+- Persistencia en atributos del jugador (no DataStore separado).
+
+## 7.8 Gravedad planetaria
 
 - Revisar y reducir logs de debug para produccion.
 - Ajustar transiciones entre planetas para viajes largos y casos borde.
 - Validar rendimiento en movil con varios planetas y mas jugadores.
 
-## 7.4 Estructura y estandar
+## 7.9 Estructura y estandar
 
 - Todavia hay scripts con print/warn directos en vez de pasar por modulo Debug.
 - Existen scripts legacy en otrojuegosimilar que conviene archivar formalmente o mover a carpeta de referencia documentada.
 - Conviene actualizar documentacion principal para reflejar el sistema de estrellas PvP ya implementado.
 
-## 7.5 Mochila y presentacion visual
+## 7.10 Mochila y presentacion visual
 
 - Cargar y validar AssetId final por Beastibit en MonstersData para reemplazar fallback visual.
 - Ajustar estilo final de badges (LOCK/UNLOCK/FOLLOW/slot) y legibilidad en resoluciones pequenas.
 - Evaluar drag and drop futuro para asignacion de team (actualmente por click/tap).
 
-## 7.6 Beastibit seguidor 3D
+## 7.11 Beastibit seguidor 3D
 
 - Calibrar valores CompanionFollow por especie para pose final (yaw/pitch/roll, distancia y altura).
 - Estandarizar pivote/origen de modelos template para reducir offsets extremos.
 - Preparar animaciones reales de locomocion companion (actualmente follow por PivotTo).
 
-## 7.8 Normalizacion de modelos Beastibit (nuevo)
+## 7.12 Normalizacion de modelos Beastibit (nuevo)
 
 Objetivo:
 
@@ -398,22 +447,25 @@ Definicion de listo para produccion (Definition of Done):
 
 ## 9. Resumen Ejecutivo
 
-Estado general del proyecto: SOLIDO Y JUGABLE. FASE 1 DE ECONOMIA COMPLETA.
+Estado general del proyecto: SOLIDO Y JUGABLE. FASE 2 DE PROGRESION COMPLETA.
 
 - Combate match-3: funcional en servidor/cliente, con cascadas y animaciones.
 - Duelos PvP/PvE: funcionales con estados completos.
 - Captura PvE: directa post-combate con pity, fragmentos y minerales.
-- Persistencia: DataStore para PvP (estrellas) e inventario (backpack + fragmentos).
+- Evolucion: gasta Bits + minerales, 3 etapas por Beastibit.
+- Alimentacion/XP: sacrifica duplicados para dar XP, con multiplicadores por rareza/evo.
+- Craft por fragmentos: desbloquea Beastibits usando fragmentos acumulados.
+- PvP: estrellas con titulos (Rookie a Bitlord) y Shield Charges contra perdida.
+- Persistencia: DataStore para PvP (estrellas) e inventario (backpack, fragmentos, bits, minerales, evoluciones, XP).
 - Gravedad planetaria: funcional con sistema avanzado de movimiento y camara.
-- Progreso PvP por estrellas: implementado e integrado.
 - Beastibit seguidor 3D: implementado con fallback, separacion companion/salvaje y base planet-aware.
 - 20 Beastibits definidos en 2 planetas (Bitara Prime y Korvaxis), 5 elementos, 4 rarezas.
 
 Siguiente foco recomendado:
 
-1. Implementar sistema de niveles/XP por alimentacion.
-2. Conectar costos de evolucion (Bits + minerales).
-3. UI de fragmentos y crafting en RosterUI.
-4. Shield Charges y titulos PvP por hitos de estrellas.
-5. VFX/feedback de progreso PvP.
+1. Agregar iconos/imagenes reales a los Beastibit nuevos.
+2. VFX/feedback de progreso (captura, evolucion).
+3. Separar CombatServer en submodulos.
+4. Ajustar balance de stats por evolucion.
+5. Preparar modelos 3D para nuevos Beastibit.
 6. Limpieza de arquitectura y documentacion para escalar contenido.

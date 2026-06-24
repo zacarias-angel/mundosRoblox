@@ -23,6 +23,24 @@ local MAX_STARS = 999999
 local COUNTER_PART_SIZE = Vector3.new(1.5, 0.55, 0.05)
 local COUNTER_HEIGHT_OFFSET = 1.1
 local COUNTER_ROTATION_DEGREES = -10
+local MAX_SHIELD_CHARGES = 3
+local DAILY_SHIELD_GRANT = 1
+local WEEKLY_SHIELD_GRANT = 1
+local SHIELD_CHARGES_ATTRIBUTE_NAME = "ShieldCharges"
+local LAST_DAILY_GRANT_ATTRIBUTE = "ShieldLastDailyGrant"
+local LAST_WEEKLY_GRANT_ATTRIBUTE = "ShieldLastWeeklyGrant"
+local SECONDS_PER_DAY = 86400
+local SECONDS_PER_WEEK = 604800
+
+local PVP_TITLES = {
+    { minStars = 0, title = "Rookie" },
+    { minStars = 10, title = "Hunter" },
+    { minStars = 25, title = "Tamer" },
+    { minStars = 50, title = "Elite" },
+    { minStars = 100, title = "Master" },
+    { minStars = 200, title = "Legend" },
+    { minStars = 500, title = "Bitlord" },
+}
 
 local starsDataStore = nil
 local playerConnections = {}
@@ -433,24 +451,101 @@ function PvpStarsService.setStars(player, stars)
     return normalized
 end
 
+function PvpStarsService.getPvpTitle(stars)
+    local safeStars = clampStars(stars)
+    local currentTitle = PVP_TITLES[1].title
+    for _, entry in ipairs(PVP_TITLES) do
+        if safeStars >= entry.minStars then
+            currentTitle = entry.title
+        end
+    end
+    return currentTitle
+end
+
+function PvpStarsService.getTitleForPlayer(player)
+    return PvpStarsService.getPvpTitle(PvpStarsService.getStars(player))
+end
+
+function PvpStarsService.getShieldCharges(player)
+    return math.max(0, math.min(MAX_SHIELD_CHARGES,
+        math.floor(tonumber(player:GetAttribute(SHIELD_CHARGES_ATTRIBUTE_NAME)) or 0)))
+end
+
+function PvpStarsService.setShieldCharges(player, charges)
+    local safe = math.clamp(math.floor(tonumber(charges) or 0), 0, MAX_SHIELD_CHARGES)
+    player:SetAttribute(SHIELD_CHARGES_ATTRIBUTE_NAME, safe)
+    return safe
+end
+
+function PvpStarsService.applyShieldRegen(player, now)
+    local serverNow = tonumber(now) or os.time()
+    local charges = PvpStarsService.getShieldCharges(player)
+    if charges >= MAX_SHIELD_CHARGES then
+        return charges
+    end
+
+    local lastDaily = tonumber(player:GetAttribute(LAST_DAILY_GRANT_ATTRIBUTE)) or 0
+    if serverNow - lastDaily >= SECONDS_PER_DAY then
+        local added = 0
+        while serverNow - (lastDaily + added * SECONDS_PER_DAY) >= SECONDS_PER_DAY and charges < MAX_SHIELD_CHARGES do
+            charges = charges + DAILY_SHIELD_GRANT
+            added = added + 1
+        end
+        if added > 0 then
+            player:SetAttribute(LAST_DAILY_GRANT_ATTRIBUTE, lastDaily + added * SECONDS_PER_DAY)
+        end
+    end
+
+    local lastWeekly = tonumber(player:GetAttribute(LAST_WEEKLY_GRANT_ATTRIBUTE)) or 0
+    if serverNow - lastWeekly >= SECONDS_PER_WEEK and charges < MAX_SHIELD_CHARGES then
+        charges = math.min(MAX_SHIELD_CHARGES, charges + WEEKLY_SHIELD_GRANT)
+        player:SetAttribute(LAST_WEEKLY_GRANT_ATTRIBUTE, lastWeekly + SECONDS_PER_WEEK)
+    end
+
+    return PvpStarsService.setShieldCharges(player, charges)
+end
+
+function PvpStarsService.consumeShieldOnLoss(player)
+    local currentStars = PvpStarsService.getStars(player)
+    if currentStars <= 0 then
+        return 0
+    end
+
+    local charges = PvpStarsService.getShieldCharges(player)
+    if charges > 0 then
+        charges = PvpStarsService.setShieldCharges(player, charges - 1)
+        return charges
+    end
+
+    return 0
+end
+
 function PvpStarsService.applyPvpDuelResult(winner, loser)
     -- Propósito: Aplicar variación de estrellas por resultado de duelo PvP.
     -- Precondiciones:
     --   1. winner y loser deben ser Player válidos.
     -- Ubicación: ServerScriptService/Combat/PvpStarsService
-    -- Retorna: number|nil, number|nil
+    -- Retorna: number|nil, number|nil, boolean
     local winnerStars = nil
     local loserStars = nil
+    local shieldUsed = false
 
     if winner then
         winnerStars = PvpStarsService.setStars(winner, PvpStarsService.getStars(winner) + WIN_STARS_DELTA)
     end
 
     if loser then
-        loserStars = PvpStarsService.setStars(loser, PvpStarsService.getStars(loser) + LOSS_STARS_DELTA)
+        local charges = PvpStarsService.getShieldCharges(loser)
+        if charges > 0 and PvpStarsService.getStars(loser) > 0 then
+            PvpStarsService.setShieldCharges(loser, charges - 1)
+            shieldUsed = true
+            loserStars = PvpStarsService.getStars(loser)
+        else
+            loserStars = PvpStarsService.setStars(loser, PvpStarsService.getStars(loser) + LOSS_STARS_DELTA)
+        end
     end
 
-    return winnerStars, loserStars
+    return winnerStars, loserStars, shieldUsed
 end
 
 function PvpStarsService.onPlayerAdded(player)

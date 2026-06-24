@@ -54,20 +54,20 @@ Pilares:
 
 ## 2.4 Economia de captura y drops
 
-- [ ] Definir que dropea al terminar una pantalla/encuentro.
-- [ ] Definir chance base de drop por tipo de enemigo/pantalla.
+- [x] Definir que dropea al terminar una pantalla/encuentro.
+- [x] Definir chance base de drop por tipo de enemigo/pantalla.
 - [x] Definir si el Beastibit se captura directo o se convierte en recurso de captura. (Regla base: no captura gratis; usar recurso dedicado tipo Bit Spheres/Capture Cores, con excepciones de tutorial/historia)
-- [ ] Definir inventario de captura (espacio, limites, orden).
+- [x] Definir inventario de captura (espacio, limites, orden).
 - [x] Definir reglas de duplicados (fusion, convertir, vender, comida). (Direccion confirmada: duplicados como comida/progreso; fusion deja de ser sistema principal)
-- [ ] Definir protecciones anti-frustracion (pity, garantias por racha).
+- [x] Definir protecciones anti-frustracion (pity, garantias por racha).
 
 ## 2.5 Beastibit como comida/fusion
 
 - [x] Definir cuales Beastibit pueden usarse como comida. (Base: duplicados, comunes y repetidos)
 - [x] Definir si hay Beastibit protegidos que no pueden sacrificarse. (Base: favoritos, equipo activo, Beastibit de historia)
-- [ ] Definir valor de comida por rareza, nivel y evolucion.
-- [ ] Definir UI de confirmacion fuerte para evitar sacrificios accidentales.
-- [ ] Definir costo en recursos para alimentar/evolucionar. (Sin fusion como sistema principal)
+- [x] Definir valor de comida por rareza, nivel y evolucion.
+- [x] Definir UI de confirmacion fuerte para evitar sacrificios accidentales.
+- [x] Definir costo en recursos para alimentar/evolucionar. (Sin fusion como sistema principal)
 - [ ] Definir limite diario/semanal si se necesita control economico.
 
 ## 2.6 Mundos, biomas y niveles
@@ -98,8 +98,8 @@ Pilares:
 - [ ] Definir penalizaciones por abandono/desconexion.
 - [ ] Definir ranking por temporadas (si aplica).
 - [x] Definir rol de estrellas PvP en combate. (Solo prestigio/ranking social: +1 al ganar PvP, -1 al perder PvP, sin bonus de stats)
-- [ ] Definir hitos de titulos por estrellas PvP.
-- [ ] Definir fuentes y limites de Shield Charges (protectores de estrella por cargas limitadas).
+- [x] Definir hitos de titulos por estrellas PvP.
+- [x] Definir fuentes y limites de Shield Charges (protectores de estrella por cargas limitadas).
 
 ## 2.9 Poderes y VFX
 
@@ -279,6 +279,13 @@ Sprint siguiente recomendado:
 - [x] Decision 018: si el elemento elegido por IA no coincide con el elemento real del salvaje, ataque = miss (0 daño).
 - [x] Decision 019: VFX PvE de ataque salvaje usa 1 proyectil por ataque, sin escalar cantidad por combo.
 - [x] Decision 020: camera shake corto en cliente al impacto del salvaje como feedback visual.
+- [x] Decision 021: evolucion cuesta Bits + minerales por etapa (500/10 y 2500/30), mineral mapeado por elemento.
+- [x] Decision 022: XP por alimentacion usa rareza base (C10/R25/E60/L150) x multiplicador de evolucion del alimento.
+- [x] Decision 023: craft por fragmentos desbloquea Beastibit non-tenidos (C30/R80/E150 frags).
+- [x] Decision 024: titulos PvP en 7 hitos (Rookie 0, Hunter 10, Tamer 25, Elite 50, Master 100, Legend 200, Bitlord 500).
+- [x] Decision 025: Shield Charges max 3, +1 diario +1 semanal, se consume al perder PvP protegiendo estrellas.
+- [x] Decision 026: Bits y minerales persistidos en BackpackV1 junto con evoluciones y XP.
+- [x] Decision 027: proteccion de alimento: no sacrificar equipo activo ni seguidor, confirmacion UI obligatoria.
 
 ## 6. Riesgos que hay que controlar
 

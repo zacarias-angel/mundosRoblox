@@ -215,6 +215,31 @@ local function getMonsterRarity(monsterId)
 	return "common"
 end
 
+local MINERAL_COLORS = {
+	["Magma Core"] = Color3.fromRGB(220, 60, 40),
+	["Aqua Shard"] = Color3.fromRGB(60, 140, 220),
+	["Root Crystal"] = Color3.fromRGB(60, 180, 70),
+	["Volt Core"] = Color3.fromRGB(240, 210, 30),
+	["Stone Heart"] = Color3.fromRGB(140, 120, 100),
+	["Pulse Fragment"] = Color3.fromRGB(180, 120, 220),
+}
+
+local MINERAL_ELEMENTS = {
+	["Magma Core"] = "Fuego",
+	["Aqua Shard"] = "Agua",
+	["Root Crystal"] = "Planta",
+	["Volt Core"] = "Electricidad",
+	["Stone Heart"] = "Roca",
+	["Pulse Fragment"] = "Energia",
+}
+
+local RARITY_FRAGMENT_COLORS = {
+	common = Color3.fromRGB(140, 145, 155),
+	rare = Color3.fromRGB(80, 160, 220),
+	epic = Color3.fromRGB(180, 80, 220),
+	legendary = Color3.fromRGB(255, 180, 40),
+}
+
 local RARITY_COLORS = {
 	common = Color3.fromRGB(140, 145, 155),
 	rare = Color3.fromRGB(80, 160, 220),
@@ -278,7 +303,7 @@ local function buildInventarioTab()
 		return sectionFrame
 	end
 
-	local function addItemRow(parent, icon, name, count, layoutOrder)
+	local function addItemRow(parent, icon, name, count, layoutOrder, iconColor)
 		local row = Instance.new("Frame")
 		row.Name = "Row_" .. name
 		row.Size = UDim2.new(1, 0, 0, 44)
@@ -288,14 +313,26 @@ local function buildInventarioTab()
 		row.Parent = parent
 		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
 
-		local itemIcon = Instance.new("ImageLabel")
-		itemIcon.Name = "Icon"
-		itemIcon.Position = UDim2.new(0, 6, 0, 4)
-		itemIcon.Size = UDim2.new(0, 36, 0, 36)
-		itemIcon.BackgroundTransparency = 1
-		itemIcon.Image = icon
-		itemIcon.ZIndex = 76
-		itemIcon.Parent = row
+		if iconColor then
+			local colorSquare = Instance.new("Frame")
+			colorSquare.Name = "ColorIcon"
+			colorSquare.Position = UDim2.new(0, 8, 0, 8)
+			colorSquare.Size = UDim2.new(0, 28, 0, 28)
+			colorSquare.BackgroundColor3 = iconColor
+			colorSquare.BorderSizePixel = 0
+			colorSquare.ZIndex = 76
+			colorSquare.Parent = row
+			Instance.new("UICorner", colorSquare).CornerRadius = UDim.new(0, 6)
+		else
+			local itemIcon = Instance.new("ImageLabel")
+			itemIcon.Name = "Icon"
+			itemIcon.Position = UDim2.new(0, 6, 0, 4)
+			itemIcon.Size = UDim2.new(0, 36, 0, 36)
+			itemIcon.BackgroundTransparency = 1
+			itemIcon.Image = icon
+			itemIcon.ZIndex = 76
+			itemIcon.Parent = row
+		end
 
 		local itemName = Instance.new("TextLabel")
 		itemName.Name = "Name"
@@ -329,7 +366,7 @@ local function buildInventarioTab()
 
 	-- Bits section
 	local bitsSection = addSection("Bits", 1)
-	local bitsRow = addItemRow(bitsSection, "rbxassetid://0", "Bits", 0, 1)
+	local bitsRow = addItemRow(bitsSection, "rbxassetid://0", "Bits", 0, 1, Color3.fromRGB(255, 210, 50))
 	bitsSection.Size = UDim2.new(1, 0, 0, 52)
 
 	-- Fragmentos section
@@ -358,13 +395,32 @@ local function buildInventarioTab()
 		table.sort(sortedFrags, function(a, b) return a.amount > b.amount end)
 
 		local fragY = 52
-		for _, entry in ipairs(sortedFrags) do
-			local row = addItemRow(fragSection, getMonsterImage(entry.monsterId),
-				"Fragmento " .. getMonsterDisplayName(entry.monsterId), entry.amount, 1)
-			row.Position = UDim2.new(0, 0, 0, fragY)
-			row.LayoutOrder = nil
-			fragY = fragY + 48
-			table.insert(fragRows, row)
+		if #sortedFrags > 0 then
+			for _, entry in ipairs(sortedFrags) do
+				local rarityKey = getMonsterRarity(entry.monsterId)
+				local fragColor = RARITY_FRAGMENT_COLORS[rarityKey] or Color3.fromRGB(140, 145, 155)
+				local row = addItemRow(fragSection, getMonsterImage(entry.monsterId),
+					"Fragmento " .. getMonsterDisplayName(entry.monsterId), entry.amount, 1, fragColor)
+				row.Position = UDim2.new(0, 0, 0, fragY)
+				row.LayoutOrder = nil
+				fragY = fragY + 48
+				table.insert(fragRows, row)
+			end
+		else
+			local emptyRow = Instance.new("TextLabel")
+			emptyRow.Name = "FragEmpty"
+			emptyRow.Position = UDim2.new(0, 16, 0, fragY + 8)
+			emptyRow.Size = UDim2.new(1, -32, 0, 24)
+			emptyRow.BackgroundTransparency = 1
+			emptyRow.Font = Enum.Font.Gotham
+			emptyRow.TextSize = 12
+			emptyRow.TextXAlignment = Enum.TextXAlignment.Left
+			emptyRow.TextColor3 = Color3.fromRGB(130, 135, 155)
+			emptyRow.Text = "Sin fragmentos. Derrota Beastibits en combate PvE para conseguirlos."
+			emptyRow.ZIndex = 75
+			emptyRow.Parent = fragSection
+			table.insert(fragRows, emptyRow)
+			fragY = fragY + 40
 		end
 		fragSection.Size = UDim2.new(1, 0, 0, math.max(52, fragY + 4))
 
@@ -377,13 +433,28 @@ local function buildInventarioTab()
 		local minY = 52
 		for _, minName in ipairs(mineralNames) do
 			local count = tonumber(player:GetAttribute("Mineral_" .. minName)) or 0
-			if count > 0 then
-				local row = addItemRow(minSection, "rbxassetid://0", minName, count, 1)
-				row.Position = UDim2.new(0, 0, 0, minY)
-				row.LayoutOrder = nil
-				minY = minY + 48
-				table.insert(minRows, row)
+			local minColor = MINERAL_COLORS[minName] or Color3.fromRGB(120, 120, 120)
+			local displayName = minName
+			local elementName = MINERAL_ELEMENTS[minName]
+			if elementName then
+				displayName = minName .. "  (" .. elementName .. ")"
 			end
+			local row = addItemRow(minSection, "rbxassetid://0", displayName, count, 1, minColor)
+			row.Position = UDim2.new(0, 0, 0, minY)
+			row.LayoutOrder = nil
+			if count <= 0 then
+				row.BackgroundTransparency = 0.4
+				local cnt = row:FindFirstChild("Count")
+				if cnt then
+					cnt.TextColor3 = Color3.fromRGB(100, 100, 100)
+				end
+				local nm = row:FindFirstChild("Name")
+				if nm then
+					nm.TextColor3 = Color3.fromRGB(140, 140, 140)
+				end
+			end
+			minY = minY + 48
+			table.insert(minRows, row)
 		end
 		minSection.Size = UDim2.new(1, 0, 0, math.max(52, minY + 4))
 

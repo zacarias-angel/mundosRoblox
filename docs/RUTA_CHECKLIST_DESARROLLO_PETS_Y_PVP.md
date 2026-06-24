@@ -286,6 +286,9 @@ Sprint siguiente recomendado:
 - [x] Decision 025: Shield Charges max 3, +1 diario +1 semanal, se consume al perder PvP protegiendo estrellas.
 - [x] Decision 026: Bits y minerales persistidos en BackpackV1 junto con evoluciones y XP.
 - [x] Decision 027: proteccion de alimento: no sacrificar equipo activo ni seguidor, confirmacion UI obligatoria.
+- [x] Decision 028: niveles 1-60 continuos con milestones interpolados, nivel determina rango de evolucion.
+- [x] Decision 029: backpack usa Count (number) en vez de Unlocked (boolean), duplicados visibles y funcionales.
+- [x] Decision 030: mineral names sanitizados (sin espacios) para atributos Roblox.
 
 ## 6. Riesgos que hay que controlar
 

@@ -27,6 +27,7 @@ local duelActive = false
 local rosterFragments = {}
 local rosterEvolutions = {}
 local rosterXP = {}
+local rosterLevels = {}
 local playerPvpTitle = "Rookie"
 local playerShieldCharges = 0
 local playerPvpStars = 0
@@ -256,7 +257,7 @@ local ELEMENT_COLORS = {
 }
 
 -- ============================================================
--- INVENTARIO TAB
+-- INVENTARIO TAB (grid: Bits + Beastibits + Minerales + Fragmentos)
 -- ============================================================
 local function buildInventarioTab()
 	local tab = createTabFrame("Inventario")
@@ -266,20 +267,20 @@ local function buildInventarioTab()
 	scroll.Position = UDim2.new(0, 8, 0, 8)
 	scroll.Size = UDim2.new(1, -16, 1, -16)
 	scroll.BackgroundTransparency = 1
-	scroll.CanvasSize = UDim2.new(0, 0, 0, 400)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, 500)
 	scroll.ScrollBarThickness = 6
 	scroll.ZIndex = 73
 	scroll.Parent = tab
 
 	local listLayout = Instance.new("UIListLayout")
-	listLayout.Padding = UDim.new(0, 12)
+	listLayout.Padding = UDim.new(0, 10)
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = scroll
 
 	local function addSection(title, layoutOrder)
 		local sectionFrame = Instance.new("Frame")
 		sectionFrame.Name = "Section_" .. title
-		sectionFrame.Size = UDim2.new(1, 0, 0, 36)
+		sectionFrame.Size = UDim2.new(1, 0, 0, 40)
 		sectionFrame.BackgroundColor3 = Color3.fromRGB(22, 26, 40)
 		sectionFrame.BorderSizePixel = 0
 		sectionFrame.LayoutOrder = layoutOrder
@@ -289,102 +290,164 @@ local function buildInventarioTab()
 
 		local titleLabel = Instance.new("TextLabel")
 		titleLabel.Name = "SectionTitle"
-		titleLabel.Position = UDim2.new(0, 10, 0, 8)
+		titleLabel.Position = UDim2.new(0, 10, 0, 10)
 		titleLabel.Size = UDim2.new(1, -20, 0, 20)
 		titleLabel.BackgroundTransparency = 1
 		titleLabel.Font = Enum.Font.GothamBold
-		titleLabel.TextSize = 14
+		titleLabel.TextSize = 13
 		titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 		titleLabel.TextColor3 = Color3.fromRGB(255, 220, 130)
 		titleLabel.Text = title
 		titleLabel.ZIndex = 75
 		titleLabel.Parent = sectionFrame
 
-		return sectionFrame
+		local grid = Instance.new("Frame")
+		grid.Name = "Grid_" .. title
+		grid.Position = UDim2.new(0, 8, 0, 36)
+		grid.Size = UDim2.new(1, -16, 0, 40)
+		grid.BackgroundTransparency = 1
+		grid.ZIndex = 74
+		grid.Parent = sectionFrame
+
+		local gridLayout = Instance.new("UIGridLayout")
+		gridLayout.CellSize = UDim2.new(0, 80, 0, 50)
+		gridLayout.CellPadding = UDim2.new(0, 6, 0, 4)
+		gridLayout.FillDirection = Enum.FillDirection.Horizontal
+		gridLayout.FillDirectionMaxCells = 8
+		gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		gridLayout.Parent = grid
+
+		return sectionFrame, grid, gridLayout
 	end
 
-	local function addItemRow(parent, icon, name, count, layoutOrder, iconColor)
-		local row = Instance.new("Frame")
-		row.Name = "Row_" .. name
-		row.Size = UDim2.new(1, 0, 0, 44)
-		row.BackgroundColor3 = Color3.fromRGB(26, 30, 46)
-		row.BorderSizePixel = 0
-		row.ZIndex = 75
-		row.Parent = parent
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+	local function makeItemCard(parent, layoutOrder, name, count, iconColor)
+		local card = Instance.new("Frame")
+		card.Name = "Card_" .. name
+		card.Size = UDim2.new(0, 80, 0, 50)
+		card.LayoutOrder = layoutOrder
+		card.BackgroundColor3 = Color3.fromRGB(28, 32, 50)
+		card.BorderSizePixel = 0
+		card.ZIndex = 75
+		card.Parent = parent
+		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 6)
 
-		if iconColor then
-			local colorSquare = Instance.new("Frame")
-			colorSquare.Name = "ColorIcon"
-			colorSquare.Position = UDim2.new(0, 8, 0, 8)
-			colorSquare.Size = UDim2.new(0, 28, 0, 28)
-			colorSquare.BackgroundColor3 = iconColor
-			colorSquare.BorderSizePixel = 0
-			colorSquare.ZIndex = 76
-			colorSquare.Parent = row
-			Instance.new("UICorner", colorSquare).CornerRadius = UDim.new(0, 6)
-		else
-			local itemIcon = Instance.new("ImageLabel")
-			itemIcon.Name = "Icon"
-			itemIcon.Position = UDim2.new(0, 6, 0, 4)
-			itemIcon.Size = UDim2.new(0, 36, 0, 36)
-			itemIcon.BackgroundTransparency = 1
-			itemIcon.Image = icon
-			itemIcon.ZIndex = 76
-			itemIcon.Parent = row
-		end
+		local colorSquare = Instance.new("Frame")
+		colorSquare.Name = "ColorIcon"
+		colorSquare.Position = UDim2.new(0, 6, 0, 6)
+		colorSquare.Size = UDim2.new(0, 16, 0, 16)
+		colorSquare.BackgroundColor3 = iconColor or Color3.fromRGB(120, 120, 120)
+		colorSquare.BorderSizePixel = 0
+		colorSquare.ZIndex = 76
+		colorSquare.Parent = card
+		Instance.new("UICorner", colorSquare).CornerRadius = UDim.new(0, 4)
 
 		local itemName = Instance.new("TextLabel")
 		itemName.Name = "Name"
-		itemName.Position = UDim2.new(0, 48, 0, 6)
-		itemName.Size = UDim2.new(1, -130, 0, 32)
+		itemName.Position = UDim2.new(0, 26, 0, 4)
+		itemName.Size = UDim2.new(1, -30, 0, 18)
 		itemName.BackgroundTransparency = 1
 		itemName.Font = Enum.Font.GothamBold
-		itemName.TextSize = 14
+		itemName.TextSize = 10
 		itemName.TextXAlignment = Enum.TextXAlignment.Left
-		itemName.TextColor3 = Color3.fromRGB(255, 255, 255)
+		itemName.TextColor3 = Color3.fromRGB(240, 240, 250)
 		itemName.Text = name
 		itemName.ZIndex = 76
-		itemName.Parent = row
+		itemName.Parent = card
 
 		local itemCount = Instance.new("TextLabel")
 		itemCount.Name = "Count"
-		itemCount.AnchorPoint = Vector2.new(1, 0)
-		itemCount.Position = UDim2.new(1, -8, 0, 6)
-		itemCount.Size = UDim2.new(0, 80, 0, 32)
+		itemCount.AnchorPoint = Vector2.new(1, 0.5)
+		itemCount.Position = UDim2.new(1, -4, 0.5, 0)
+		itemCount.Size = UDim2.new(0, 36, 0, 18)
 		itemCount.BackgroundTransparency = 1
-		itemCount.Font = Enum.Font.GothamBold
-		itemCount.TextSize = 16
+		itemCount.Font = Enum.Font.GothamBlack
+		itemCount.TextSize = 14
 		itemCount.TextXAlignment = Enum.TextXAlignment.Right
 		itemCount.TextColor3 = Color3.fromRGB(255, 230, 100)
-		itemCount.Text = tostring(count)
+		itemCount.Text = "x" .. tostring(count)
 		itemCount.ZIndex = 76
-		itemCount.Parent = row
+		itemCount.Parent = card
 
-		return row
+		if count <= 0 then
+			card.BackgroundTransparency = 0.5
+			itemName.TextColor3 = Color3.fromRGB(120, 120, 130)
+			itemCount.TextColor3 = Color3.fromRGB(100, 100, 100)
+		end
+
+		return card
 	end
 
-	-- Bits section
-	local bitsSection = addSection("Bits", 1)
-	local bitsRow = addItemRow(bitsSection, "rbxassetid://0", "Bits", 0, 1, Color3.fromRGB(255, 210, 50))
-	bitsSection.Size = UDim2.new(1, 0, 0, 52)
+	-- Bits
+	local bitsSection, bitsGrid, bitsGridLayout = addSection("Bits", 1)
+	local bitsCard = makeItemCard(bitsGrid, 1, "Bits", 0, Color3.fromRGB(255, 210, 50))
+	bitsSection.Size = UDim2.new(1, 0, 0, 92)
 
-	-- Fragmentos section
-	local fragSection = addSection("Fragmentos", 2)
-	local fragRows = {}
+	-- Beastibits
+	local beastSection, beastGrid, beastGridLayout = addSection("Beastibits", 2)
+	local beastCards = {}
 
-	-- Minerales section
-	local minSection = addSection("Minerales", 3)
-	local minRows = {}
+	-- Minerales
+	local minSection, minGrid, minGridLayout = addSection("Minerales", 3)
+	local minCards = {}
+
+	-- Fragmentos
+	local fragSection, fragGrid, fragGridLayout = addSection("Fragmentos", 4)
+	local fragCards = {}
 
 	tabRefreshers["Inventario"] = function()
 		local bits = tonumber(player:GetAttribute("Bits")) or 0
-		bitsRow:FindFirstChild("Count").Text = tostring(bits)
+		bitsCard:FindFirstChild("Count").Text = "x" .. tostring(bits)
 
-		for _, row in ipairs(fragRows) do
-			row:Destroy()
+		-- Beastibits
+		for _, card in ipairs(beastCards) do
+			card:Destroy()
 		end
-		fragRows = {}
+		beastCards = {}
+
+		local ownedBeasts = {}
+		for _, item in ipairs(rosterBackpack) do
+			local count = math.max(0, math.floor(tonumber(item.Count) or 0))
+			if count > 0 then
+				table.insert(ownedBeasts, { monsterId = item.MonsterId, count = count })
+			end
+		end
+		table.sort(ownedBeasts, function(a, b) return a.monsterId < b.monsterId end)
+
+		for i, entry in ipairs(ownedBeasts) do
+			local rarityKey = getMonsterRarity(entry.monsterId)
+			local iconColor = RARITY_COLORS[rarityKey] or Color3.fromRGB(140, 145, 155)
+			local card = makeItemCard(beastGrid, i, getMonsterDisplayName(entry.monsterId), entry.count, iconColor)
+			table.insert(beastCards, card)
+		end
+
+		local beastRows = math.max(1, math.ceil(#ownedBeasts / beastGridLayout.FillDirectionMaxCells))
+		beastGrid.Size = UDim2.new(1, -16, 0, beastRows * 54)
+		beastSection.Size = UDim2.new(1, 0, 0, 40 + beastRows * 54 + 4)
+
+		-- Minerales
+		for _, card in ipairs(minCards) do
+			card:Destroy()
+		end
+		minCards = {}
+
+		local mineralNames = { "Magma Core", "Aqua Shard", "Root Crystal", "Volt Core", "Stone Heart", "Pulse Fragment" }
+		for i, minName in ipairs(mineralNames) do
+			local count = tonumber(player:GetAttribute("Mineral_" .. string.gsub(minName, "%s+", ""))) or 0
+			local minColor = MINERAL_COLORS[minName] or Color3.fromRGB(120, 120, 120)
+			local card = makeItemCard(minGrid, i, minName, count, minColor)
+			table.insert(minCards, card)
+		end
+
+		local minRows = math.max(1, math.ceil(#mineralNames / minGridLayout.FillDirectionMaxCells))
+		minGrid.Size = UDim2.new(1, -16, 0, minRows * 54)
+		minSection.Size = UDim2.new(1, 0, 0, 40 + minRows * 54 + 4)
+
+		-- Fragmentos
+		for _, card in ipairs(fragCards) do
+			card:Destroy()
+		end
+		fragCards = {}
 
 		local sortedFrags = {}
 		for monsterId, amount in pairs(rosterFragments) do
@@ -394,71 +457,32 @@ local function buildInventarioTab()
 		end
 		table.sort(sortedFrags, function(a, b) return a.amount > b.amount end)
 
-		local fragY = 52
 		if #sortedFrags > 0 then
-			for _, entry in ipairs(sortedFrags) do
+			for i, entry in ipairs(sortedFrags) do
 				local rarityKey = getMonsterRarity(entry.monsterId)
 				local fragColor = RARITY_FRAGMENT_COLORS[rarityKey] or Color3.fromRGB(140, 145, 155)
-				local row = addItemRow(fragSection, getMonsterImage(entry.monsterId),
-					"Fragmento " .. getMonsterDisplayName(entry.monsterId), entry.amount, 1, fragColor)
-				row.Position = UDim2.new(0, 0, 0, fragY)
-				row.LayoutOrder = nil
-				fragY = fragY + 48
-				table.insert(fragRows, row)
+				local card = makeItemCard(fragGrid, i, "Frag. " .. getMonsterDisplayName(entry.monsterId), entry.amount, fragColor)
+				table.insert(fragCards, card)
 			end
 		else
-			local emptyRow = Instance.new("TextLabel")
-			emptyRow.Name = "FragEmpty"
-			emptyRow.Position = UDim2.new(0, 16, 0, fragY + 8)
-			emptyRow.Size = UDim2.new(1, -32, 0, 24)
-			emptyRow.BackgroundTransparency = 1
-			emptyRow.Font = Enum.Font.Gotham
-			emptyRow.TextSize = 12
-			emptyRow.TextXAlignment = Enum.TextXAlignment.Left
-			emptyRow.TextColor3 = Color3.fromRGB(130, 135, 155)
-			emptyRow.Text = "Sin fragmentos. Derrota Beastibits en combate PvE para conseguirlos."
-			emptyRow.ZIndex = 75
-			emptyRow.Parent = fragSection
-			table.insert(fragRows, emptyRow)
-			fragY = fragY + 40
+			local emptyLabel = Instance.new("TextLabel")
+			emptyLabel.Name = "FragEmpty"
+			emptyLabel.Size = UDim2.new(1, 0, 0, 24)
+			emptyLabel.BackgroundTransparency = 1
+			emptyLabel.Font = Enum.Font.Gotham
+			emptyLabel.TextSize = 11
+			emptyLabel.TextColor3 = Color3.fromRGB(130, 135, 155)
+			emptyLabel.Text = "(sin fragmentos)"
+			emptyLabel.ZIndex = 75
+			emptyLabel.Parent = fragGrid
+			table.insert(fragCards, emptyLabel)
 		end
-		fragSection.Size = UDim2.new(1, 0, 0, math.max(52, fragY + 4))
 
-		for _, row in ipairs(minRows) do
-			row:Destroy()
-		end
-		minRows = {}
+		local fragRows = math.max(1, math.ceil(math.max(1, #sortedFrags) / fragGridLayout.FillDirectionMaxCells))
+		fragGrid.Size = UDim2.new(1, -16, 0, fragRows * 54)
+		fragSection.Size = UDim2.new(1, 0, 0, 40 + fragRows * 54 + 4)
 
-		local mineralNames = { "Magma Core", "Aqua Shard", "Root Crystal", "Volt Core", "Stone Heart", "Pulse Fragment" }
-		local minY = 52
-		for _, minName in ipairs(mineralNames) do
-			local count = tonumber(player:GetAttribute("Mineral_" .. minName)) or 0
-			local minColor = MINERAL_COLORS[minName] or Color3.fromRGB(120, 120, 120)
-			local displayName = minName
-			local elementName = MINERAL_ELEMENTS[minName]
-			if elementName then
-				displayName = minName .. "  (" .. elementName .. ")"
-			end
-			local row = addItemRow(minSection, "rbxassetid://0", displayName, count, 1, minColor)
-			row.Position = UDim2.new(0, 0, 0, minY)
-			row.LayoutOrder = nil
-			if count <= 0 then
-				row.BackgroundTransparency = 0.4
-				local cnt = row:FindFirstChild("Count")
-				if cnt then
-					cnt.TextColor3 = Color3.fromRGB(100, 100, 100)
-				end
-				local nm = row:FindFirstChild("Name")
-				if nm then
-					nm.TextColor3 = Color3.fromRGB(140, 140, 140)
-				end
-			end
-			minY = minY + 48
-			table.insert(minRows, row)
-		end
-		minSection.Size = UDim2.new(1, 0, 0, math.max(52, minY + 4))
-
-		local totalH = 52 + 8 + fragSection.Size.Y.Offset + 16 + minSection.Size.Y.Offset + 24
+		local totalH = bitsSection.AbsoluteSize.Y + beastSection.AbsoluteSize.Y + minSection.AbsoluteSize.Y + fragSection.AbsoluteSize.Y + 40
 		scroll.CanvasSize = UDim2.new(0, 0, 0, totalH)
 	end
 end
@@ -503,15 +527,19 @@ local function buildBeastibitTab()
 		table.sort(sortedIds)
 
 		local unlockedSet = {}
+		local countMap = {}
 		for _, item in ipairs(rosterBackpack) do
-			if item.Unlocked == true then
+			local count = math.max(0, math.floor(tonumber(item.Count) or 0))
+			if count > 0 then
 				unlockedSet[item.MonsterId] = true
+				countMap[item.MonsterId] = count
 			end
 		end
 
 		for i, monsterId in ipairs(sortedIds) do
 			local data = MonstersData[monsterId]
 			local unlocked = unlockedSet[monsterId] == true
+			local monsterCount = countMap[monsterId] or 0
 			local rarityKey = getMonsterRarity(monsterId)
 
 			local card = Instance.new("Frame")
@@ -569,6 +597,23 @@ local function buildBeastibitTab()
 			nameLabel.Text = getMonsterDisplayName(monsterId)
 			nameLabel.ZIndex = 75
 			nameLabel.Parent = card
+
+			if unlocked and monsterCount > 1 then
+				local countBadge = Instance.new("TextLabel")
+				countBadge.Name = "CountBadge"
+				countBadge.AnchorPoint = Vector2.new(1, 0)
+				countBadge.Position = UDim2.new(1, -4, 0, 4)
+				countBadge.Size = UDim2.new(0, 20, 0, 14)
+				countBadge.BackgroundColor3 = Color3.fromRGB(60, 130, 80)
+				countBadge.BackgroundTransparency = 0.15
+				countBadge.Font = Enum.Font.GothamBold
+				countBadge.TextSize = 9
+				countBadge.TextColor3 = Color3.fromRGB(160, 255, 180)
+				countBadge.Text = "x" .. tostring(monsterCount)
+				countBadge.ZIndex = 77
+				countBadge.Parent = card
+				Instance.new("UICorner", countBadge).CornerRadius = UDim.new(0, 3)
+			end
 
 			table.insert(collectionCards, card)
 		end
@@ -775,7 +820,7 @@ local function buildTeamTab()
 
 		local idx = 0
 		for _, item in ipairs(rosterBackpack) do
-			if item.Unlocked == true then
+			if (tonumber(item.Count) or 0) > 0 then
 				idx = idx + 1
 				local monsterId = item.MonsterId
 				local btn = Instance.new("ImageButton")
@@ -927,7 +972,7 @@ local function buildSeguidorTab()
 
 		local idx = 0
 		for _, item in ipairs(rosterBackpack) do
-			if item.Unlocked == true then
+			if (tonumber(item.Count) or 0) > 0 then
 				idx = idx + 1
 				local monsterId = item.MonsterId
 				local isFollower = selectedFollowerMonsterId == monsterId
@@ -1098,7 +1143,7 @@ local function buildCraftTab()
 	craftDetailXP.TextSize = 12
 	craftDetailXP.TextXAlignment = Enum.TextXAlignment.Left
 	craftDetailXP.TextColor3 = Color3.fromRGB(160, 210, 130)
-	craftDetailXP.Text = "XP: 0"
+	craftDetailXP.Text = "Nivel: 1"
 	craftDetailXP.ZIndex = 74
 	craftDetailXP.Parent = craftDetailFrame
 
@@ -1132,7 +1177,7 @@ local function buildCraftTab()
 	evolveButton.Font = Enum.Font.GothamBold
 	evolveButton.TextSize = 14
 	evolveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	evolveButton.Text = "Evolucionar (500 Bits + 10 minerales)"
+	evolveButton.Text = "Evolucionar (Nvl 20 + 500 Bits + 10 minerales)"
 	evolveButton.ZIndex = 75
 	evolveButton.Parent = craftDetailActions
 	Instance.new("UICorner", evolveButton).CornerRadius = UDim.new(0, 7)
@@ -1237,7 +1282,7 @@ local function buildCraftTab()
 		feedConfirmButtons = {}
 		local idx = 0
 		for _, item in ipairs(rosterBackpack) do
-			if item.Unlocked == true and item.MonsterId ~= craftTargetMonsterId then
+			if (tonumber(item.Count) or 0) > 0 and item.MonsterId ~= craftTargetMonsterId then
 				-- Exclude team and follower
 				local inTeam = false
 				for _, pet in ipairs(rosterDuelTeam) do
@@ -1302,7 +1347,7 @@ local function buildCraftTab()
 
 		local idx = 0
 		for _, item in ipairs(rosterBackpack) do
-			if item.Unlocked == true then
+			if (tonumber(item.Count) or 0) > 0 then
 				idx = idx + 1
 				local monsterId = item.MonsterId
 				local isTarget = craftTargetMonsterId == monsterId
@@ -1347,10 +1392,15 @@ local function buildCraftTab()
 					local fragCount = rosterFragments[monsterId] or 0
 					local evo = rosterEvolutions[monsterId] or 1
 					local xp = rosterXP[monsterId] or 0
+					local lvl = rosterLevels[monsterId] or 1
+					local nextEvoXP = 0
+					if evo <= 2 then
+						nextEvoXP = 500
+					end
 					craftDetailIcon.Image = getMonsterImage(monsterId)
 					craftDetailName.Text = getMonsterDisplayName(monsterId)
-					craftDetailEvo.Text = "Evolucion actual: " .. tostring(evo) .. " / 3"
-					craftDetailXP.Text = "XP acumulada: " .. tostring(xp)
+					craftDetailEvo.Text = "Evo " .. tostring(evo) .. "/3"
+					craftDetailXP.Text = "Nivel " .. tostring(lvl) .. "  |  XP: " .. tostring(xp)
 					craftDetailFrags.Text = "Fragmentos: " .. tostring(fragCount)
 					tabRefreshers["Craft"]()
 				end)
@@ -1362,7 +1412,7 @@ local function buildCraftTab()
 		-- Show unlocked monsters with fragments > 0 that are not yet unlocked
 		local unlockedSet = {}
 		for _, item in ipairs(rosterBackpack) do
-			if item.Unlocked == true then
+			if (tonumber(item.Count) or 0) > 0 then
 				unlockedSet[item.MonsterId] = true
 			end
 		end
@@ -1425,6 +1475,27 @@ local function buildCraftTab()
 
 		local rows = math.max(1, math.ceil(idx / 4))
 		craftSelectionScroll.CanvasSize = UDim2.new(0, 0, 0, rows * 80)
+
+		-- Refresh detail panel for currently selected monster
+		if craftTargetMonsterId then
+			local fragCount = rosterFragments[craftTargetMonsterId] or 0
+			local evo = rosterEvolutions[craftTargetMonsterId] or 1
+			local xp = rosterXP[craftTargetMonsterId] or 0
+			local lvl = rosterLevels[craftTargetMonsterId] or 1
+			local isOwned = false
+			for _, item in ipairs(rosterBackpack) do
+				if item.MonsterId == craftTargetMonsterId and (tonumber(item.Count) or 0) > 0 then
+					isOwned = true
+					break
+				end
+			end
+			craftDetailIcon.Image = getMonsterImage(craftTargetMonsterId)
+			craftDetailIcon.ImageColor3 = isOwned and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(80, 80, 80)
+			craftDetailName.Text = isOwned and getMonsterDisplayName(craftTargetMonsterId) or (getMonsterDisplayName(craftTargetMonsterId) .. " (no desbloqueado)")
+			craftDetailEvo.Text = isOwned and ("Evo " .. tostring(evo) .. "/3") or "Disponible por craft"
+			craftDetailXP.Text = isOwned and ("Nivel " .. tostring(lvl) .. "  |  XP: " .. tostring(xp)) or ""
+			craftDetailFrags.Text = "Fragmentos: " .. tostring(fragCount)
+		end
 	end
 end
 
@@ -1479,6 +1550,7 @@ local function applyRosterState(data)
 	rosterFragments = type(data.fragments) == "table" and data.fragments or rosterFragments
 	rosterEvolutions = type(data.evolutions) == "table" and data.evolutions or rosterEvolutions
 	rosterXP = type(data.monsterXP) == "table" and data.monsterXP or rosterXP
+	rosterLevels = type(data.monsterLevels) == "table" and data.monsterLevels or rosterLevels
 
 	if type(data.selectedFollowerMonsterId) == "string" then
 		selectedFollowerMonsterId = data.selectedFollowerMonsterId

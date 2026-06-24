@@ -31,6 +31,7 @@ function BackpackDataStore.loadPlayerData(player)
 		minerals = {},
 		monsterEvolutions = {},
 		monsterXP = {},
+		monsterCounts = {},
 	}
 
 	if not backpackStore then
@@ -78,6 +79,14 @@ function BackpackDataStore.loadPlayerData(player)
 				end
 			end
 		end
+		if type(saved.monsterCounts) == "table" then
+			for monsterId, count in pairs(saved.monsterCounts) do
+				local safeCount = math.max(0, math.floor(tonumber(count) or 0))
+				if safeCount > 0 then
+					data.monsterCounts[monsterId] = safeCount
+				end
+			end
+		end
 	elseif not ok then
 		warn("[BackpackDataStore] Error al cargar datos de " .. player.Name .. ": " .. tostring(saved))
 	end
@@ -85,7 +94,7 @@ function BackpackDataStore.loadPlayerData(player)
 	return data
 end
 
-function BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, monsterEvolutions, monsterXP)
+function BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, monsterEvolutions, monsterXP, monsterCounts)
 	if not backpackStore then
 		return
 	end
@@ -135,6 +144,15 @@ function BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, b
 			local safeXP = math.max(0, math.floor(tonumber(xp) or 0))
 			if safeXP > 0 then
 				data.monsterXP[monsterId] = safeXP
+			end
+		end
+	end
+	if type(monsterCounts) == "table" then
+		data.monsterCounts = {}
+		for monsterId, count in pairs(monsterCounts) do
+			local safeCount = math.max(0, math.floor(tonumber(count) or 0))
+			if safeCount > 0 then
+				data.monsterCounts[monsterId] = safeCount
 			end
 		end
 	end

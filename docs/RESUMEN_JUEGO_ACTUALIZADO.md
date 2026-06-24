@@ -1,6 +1,6 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-06-23
+Fecha de actualizacion: 2026-06-24
 
 Terminologia oficial:
 
@@ -452,14 +452,16 @@ Estado general del proyecto: SOLIDO Y JUGABLE. FASE 2 DE PROGRESION COMPLETA.
 - Combate match-3: funcional en servidor/cliente, con cascadas y animaciones.
 - Duelos PvP/PvE: funcionales con estados completos.
 - Captura PvE: directa post-combate con pity, fragmentos y minerales.
-- Evolucion: gasta Bits + minerales, 3 etapas por Beastibit.
-- Alimentacion/XP: sacrifica duplicados para dar XP, con multiplicadores por rareza/evo.
+- Niveles y XP: sistema 1-60 con milestones, nivel determina evolucion.
+- Duplicados: backpack con Count, visibles en inventario y usables como comida.
+- Evolucion: gasta Bits + minerales, requiere nivel 20/40 segun etapa.
+- Alimentacion/XP: sacrifica duplicados, formula completa (rareza x evo x nivel).
 - Craft por fragmentos: desbloquea Beastibits usando fragmentos acumulados.
 - PvP: estrellas con titulos (Rookie a Bitlord) y Shield Charges contra perdida.
-- Persistencia: DataStore para PvP (estrellas) e inventario (backpack, fragmentos, bits, minerales, evoluciones, XP).
+- Persistencia: DataStore BackpackV1 (backpack, fragmentos, bits, minerales, evoluciones, XP, counts).
 - Gravedad planetaria: funcional con sistema avanzado de movimiento y camara.
-- Beastibit seguidor 3D: implementado con fallback, separacion companion/salvaje y base planet-aware.
-- 20 Beastibits definidos en 2 planetas (Bitara Prime y Korvaxis), 5 elementos, 4 rarezas.
+- Beastibit seguidor 3D: implementado con fallback, separacion companion/salvaje.
+- 20 Beastibits definidos en 2 planetas, 5 elementos, 4 rarezas.
 
 Siguiente foco recomendado:
 

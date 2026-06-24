@@ -1455,7 +1455,7 @@ local function endMonsterDuel(player, reason, winner)
 
             if monsterData.Element and ELEMENT_TO_MINERAL[monsterData.Element] and math.random() <= MINERAL_DROP_CHANCE then
                 local mineralName = ELEMENT_TO_MINERAL[monsterData.Element]
-                local mineralAttr = "Mineral_" .. mineralName
+                local mineralAttr = "Mineral_" .. string.gsub(mineralName, "%s+", "")
                 local currentMinerals = getPlayerIntAttribute(player, mineralAttr, 0)
                 player:SetAttribute(mineralAttr, currentMinerals + 1)
                 mineralAwarded = {
@@ -2012,10 +2012,13 @@ local function sendRosterState(player, reason)
 
     local evolutions = {}
     local xp = {}
+    local levels = {}
     for _, item in ipairs(backpack) do
-        if item.Unlocked == true then
+        local count = math.max(0, math.floor(tonumber(item.Count) or 0))
+        if count > 0 then
             evolutions[item.MonsterId] = TeamManager.getMonsterEvolution(player, item.MonsterId)
             xp[item.MonsterId] = TeamManager.getMonsterXP(player, item.MonsterId)
+            levels[item.MonsterId] = TeamManager.getMonsterLevel(player, item.MonsterId)
         end
     end
 
@@ -2036,6 +2039,7 @@ local function sendRosterState(player, reason)
         fragments = allFragments,
         evolutions = evolutions,
         monsterXP = xp,
+        monsterLevels = levels,
         shieldCharges = shieldCharges,
         pvpTitle = pvpTitle,
         pvpStars = stars,
@@ -2068,7 +2072,7 @@ local function applyDuelSlotSelection(player, payload)
     local backpack = TeamManager.getBackpack(player)
     local isUnlocked = false
     for _, item in ipairs(backpack) do
-        if item.MonsterId == payload.monsterId and item.Unlocked == true then
+        if item.MonsterId == payload.monsterId and (math.max(0, math.floor(tonumber(item.Count) or 0)) > 0) then
             isUnlocked = true
             break
         end
@@ -2079,7 +2083,27 @@ local function applyDuelSlotSelection(player, payload)
         return
     end
 
+    local monsterCount = 0
+    for _, item in ipairs(backpack) do
+        if item.MonsterId == payload.monsterId then
+            monsterCount = math.max(0, math.floor(tonumber(item.Count) or 0))
+            break
+        end
+    end
+
     local currentTeam = TeamManager.getOrCreateTeam(player)
+    local usedInTeam = 0
+    for i, pet in ipairs(currentTeam) do
+        if i ~= slotIndex and pet and pet.MonsterId == payload.monsterId then
+            usedInTeam = usedInTeam + 1
+        end
+    end
+
+    if usedInTeam >= monsterCount then
+        sendDuelState(player, { type = "roster-error", reason = "not-enough-copies" })
+        return
+    end
+
     currentTeam[slotIndex] = {
         MonsterId = payload.monsterId,
     }
@@ -2513,7 +2537,7 @@ Players.PlayerAdded:Connect(function(player)
             for mineralName, count in pairs(savedData.minerals) do
                 local safeCount = math.max(0, math.floor(tonumber(count) or 0))
                 if safeCount > 0 then
-                    player:SetAttribute("Mineral_" .. mineralName, safeCount)
+                    player:SetAttribute("Mineral_" .. string.gsub(mineralName, "%s+", ""), safeCount)
                 end
             end
         end
@@ -2524,8 +2548,8 @@ Players.PlayerAdded:Connect(function(player)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
-    local unlockedMonsters, fragments, bits, minerals, evolutions, xp = TeamManager.getProfileData(player)
-    BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, evolutions, xp)
+    local unlockedMonsters, fragments, bits, minerals, evolutions, xp, monsterCounts = TeamManager.getProfileData(player)
+    BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, evolutions, xp, monsterCounts)
     PvpStarsService.onPlayerRemoving(player)
     cleanPlayerState(player)
 end)
@@ -2548,7 +2572,7 @@ for _, player in ipairs(Players:GetPlayers()) do
             for mineralName, count in pairs(savedData.minerals) do
                 local safeCount = math.max(0, math.floor(tonumber(count) or 0))
                 if safeCount > 0 then
-                    player:SetAttribute("Mineral_" .. mineralName, safeCount)
+                    player:SetAttribute("Mineral_" .. string.gsub(mineralName, "%s+", ""), safeCount)
                 end
             end
         end

@@ -684,19 +684,6 @@ duelResultDropsArea.ZIndex = 62
 duelResultDropsArea.Parent = duelResultCard
 Instance.new("UICorner", duelResultDropsArea).CornerRadius = UDim.new(0, 10)
 
-local duelResultDropsLabel = Instance.new("TextLabel")
-duelResultDropsLabel.Name = "DropsLabel"
-duelResultDropsLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-duelResultDropsLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
-duelResultDropsLabel.Size = UDim2.new(1, -12, 1, -8)
-duelResultDropsLabel.BackgroundTransparency = 1
-duelResultDropsLabel.Font = Enum.Font.Gotham
-duelResultDropsLabel.TextSize = 14
-duelResultDropsLabel.TextColor3 = Color3.fromRGB(120, 130, 160)
-duelResultDropsLabel.Text = ""
-duelResultDropsLabel.ZIndex = 63
-duelResultDropsLabel.Parent = duelResultDropsArea
-
 local duelResultDropsLayout = Instance.new("UIListLayout")
 duelResultDropsLayout.Name = "DropsLayout"
 duelResultDropsLayout.FillDirection = Enum.FillDirection.Vertical
@@ -1680,9 +1667,6 @@ local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind
     else
         duelResultMineralLabel.Visible = false
     end
-
-    -- Hide old single label
-    duelResultDropsLabel.Visible = false
 
     duelResultOverlay.Visible = true
 end

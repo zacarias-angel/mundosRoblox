@@ -13,8 +13,8 @@ local TEAM_SIZE = 5
 local MAX_EVOLUTION = 3
 
 local EVOLUTION_COST = {
-	[1] = { bits = 500, minerals = 10 },
-	[2] = { bits = 2500, minerals = 30 },
+	[1] = { bits = 500, minerals = 10, levelRequired = 20 },
+	[2] = { bits = 2500, minerals = 30, levelRequired = 40 },
 }
 
 local XP_BY_RARITY = {
@@ -29,6 +29,97 @@ local EVO_XP_MULTIPLIER = {
 	[2] = 1.75,
 	[3] = 3.0,
 }
+
+local LEVEL_XP_MILESTONES = {
+	{ level = 1, xp = 0 },
+	{ level = 5, xp = 40 },
+	{ level = 10, xp = 120 },
+	{ level = 15, xp = 260 },
+	{ level = 20, xp = 500 },
+	{ level = 21, xp = 650 },
+	{ level = 25, xp = 950 },
+	{ level = 30, xp = 1450 },
+	{ level = 35, xp = 2200 },
+	{ level = 40, xp = 3200 },
+	{ level = 41, xp = 3800 },
+	{ level = 45, xp = 5000 },
+	{ level = 50, xp = 6800 },
+	{ level = 55, xp = 9200 },
+	{ level = 60, xp = 12000 },
+}
+
+local MAX_LEVEL = 60
+
+local function getXPForLevel(targetLevel)
+	local safeLevel = math.clamp(math.floor(tonumber(targetLevel) or 1), 1, MAX_LEVEL)
+	if safeLevel <= 1 then
+		return 0
+	end
+
+	for i = 1, #LEVEL_XP_MILESTONES - 1 do
+		local a = LEVEL_XP_MILESTONES[i]
+		local b = LEVEL_XP_MILESTONES[i + 1]
+		if safeLevel >= a.level and safeLevel <= b.level then
+			local ratio = (safeLevel - a.level) / (b.level - a.level)
+			return math.ceil(a.xp + (b.xp - a.xp) * ratio)
+		end
+	end
+
+	return LEVEL_XP_MILESTONES[#LEVEL_XP_MILESTONES].xp
+end
+
+local function getLevelForXP(xp)
+	local safeXP = math.max(0, math.floor(tonumber(xp) or 0))
+	if safeXP <= 0 then
+		return 1
+	end
+
+	for i = #LEVEL_XP_MILESTONES, 1, -1 do
+		if safeXP >= LEVEL_XP_MILESTONES[i].xp then
+			if i < #LEVEL_XP_MILESTONES then
+				local a = LEVEL_XP_MILESTONES[i]
+				local b = LEVEL_XP_MILESTONES[i + 1]
+				local extraXP = safeXP - a.xp
+				local xpPerLevel = (b.xp - a.xp) / (b.level - a.level)
+				local extraLevels = math.floor(extraXP / xpPerLevel)
+				return math.min(MAX_LEVEL, a.level + extraLevels)
+			end
+			return MAX_LEVEL
+		end
+	end
+
+	return 1
+end
+
+local function getLevelMultiplier(level)
+	local safeLevel = math.clamp(math.floor(tonumber(level) or 1), 1, MAX_LEVEL)
+	if safeLevel <= 5 then
+		return 0.8
+	elseif safeLevel <= 10 then
+		return 1.0
+	elseif safeLevel <= 15 then
+		return 1.25
+	elseif safeLevel <= 20 then
+		return 1.5
+	elseif safeLevel <= 30 then
+		return 1.8
+	elseif safeLevel <= 40 then
+		return 2.2
+	else
+		return 3.0
+	end
+end
+
+local function getEvolutionForLevel(level)
+	local safeLevel = math.clamp(math.floor(tonumber(level) or 1), 1, MAX_LEVEL)
+	if safeLevel <= 20 then
+		return 1
+	elseif safeLevel <= 40 then
+		return 2
+	else
+		return 3
+	end
+end
 
 local ELEMENT_EVOLUTION_MINERAL = {
 	Fuego = "Magma Core",
@@ -82,14 +173,14 @@ local function cloneBackpack(backpack)
     for index, item in ipairs(backpack) do
         copy[index] = {
             MonsterId = item.MonsterId,
-            Unlocked = item.Unlocked == true,
+            Count = math.max(0, math.floor(tonumber(item.Count) or 0)),
         }
     end
     return copy
 end
 
 local function isMonsterUnlockedInBackpack(backpack, monsterId)
-    -- Propósito: Verificar si un Beastibit está desbloqueado dentro de la mochila.
+    -- Propósito: Verificar si un Beastibit está desbloqueado (tiene al menos 1 copia) en la mochila.
     -- Precondiciones:
     --   1. backpack debe ser tabla.
     --   2. monsterId debe ser string.
@@ -100,12 +191,38 @@ local function isMonsterUnlockedInBackpack(backpack, monsterId)
     end
 
     for _, item in ipairs(backpack) do
-        if item.MonsterId == monsterId and item.Unlocked == true then
-            return true
+        if item.MonsterId == monsterId then
+            local count = math.max(0, math.floor(tonumber(item.Count) or 0))
+            return count > 0
         end
     end
 
     return false
+end
+
+local function getMonsterCountInBackpack(backpack, monsterId)
+    if type(backpack) ~= "table" or type(monsterId) ~= "string" then
+        return 0
+    end
+
+    for _, item in ipairs(backpack) do
+        if item.MonsterId == monsterId then
+            return math.max(0, math.floor(tonumber(item.Count) or 0))
+        end
+    end
+
+    return 0
+end
+
+local function setMonsterCountInBackpack(backpack, monsterId, count)
+    local safeCount = math.max(0, math.floor(tonumber(count) or 0))
+    for _, item in ipairs(backpack) do
+        if item.MonsterId == monsterId then
+            item.Count = safeCount
+            return safeCount
+        end
+    end
+    return 0
 end
 
 local function getDefaultTeam()
@@ -137,9 +254,10 @@ local function buildDefaultBackpack()
 
     for _, monsterId in ipairs(sortedMonsterIds) do
         local data = MonstersData[monsterId]
+        local starterCount = (data and data.StarterUnlocked == true) and 1 or 0
         table.insert(backpack, {
             MonsterId = monsterId,
-            Unlocked = data and data.StarterUnlocked == true or false,
+            Count = starterCount,
         })
     end
 
@@ -147,18 +265,14 @@ local function buildDefaultBackpack()
 end
 
 local function chooseDefaultFollowerMonsterId(backpack, fallbackTeam)
-    -- Propósito: Elegir Beastibit seguidor por defecto priorizando desbloqueados en mochila.
-    -- Precondiciones:
-    --   1. backpack y fallbackTeam deben ser tablas.
-    -- Ubicación: ServerScriptService/Combat/TeamManager
-    -- Retorna: string
     local preferredMonsterId = fallbackTeam[1] and fallbackTeam[1].MonsterId or nil
     if type(preferredMonsterId) == "string" and isMonsterUnlockedInBackpack(backpack, preferredMonsterId) then
         return preferredMonsterId
     end
 
     for _, item in ipairs(backpack) do
-        if item.Unlocked == true and type(item.MonsterId) == "string" then
+        local count = math.max(0, math.floor(tonumber(item.Count) or 0))
+        if count > 0 and type(item.MonsterId) == "string" then
             return item.MonsterId
         end
     end
@@ -171,16 +285,13 @@ local function chooseDefaultFollowerMonsterId(backpack, fallbackTeam)
 end
 
 local function ensureBackpackHasTeamMonsters(backpack, team)
-    -- Propósito: Garantizar que los Beastibit del equipo existan y estén desbloqueados en mochila.
-    -- Precondiciones:
-    --   1. backpack y team deben ser tablas.
-    -- Ubicación: ServerScriptService/Combat/TeamManager
-    -- Retorna: nil
     for _, pet in ipairs(team) do
         local found = false
         for _, item in ipairs(backpack) do
             if item.MonsterId == pet.MonsterId then
-                item.Unlocked = true
+                if getMonsterCountInBackpack(backpack, pet.MonsterId) <= 0 then
+                    setMonsterCountInBackpack(backpack, pet.MonsterId, 1)
+                end
                 found = true
                 break
             end
@@ -189,7 +300,7 @@ local function ensureBackpackHasTeamMonsters(backpack, team)
         if not found then
             table.insert(backpack, {
                 MonsterId = pet.MonsterId,
-                Unlocked = true,
+                Count = 1,
             })
         end
     end
@@ -231,25 +342,32 @@ local function getEvolutionMineralForMonster(monsterId)
     return nil
 end
 
+local function sanitizeMineralAttr(mineralName)
+	if type(mineralName) ~= "string" then
+		return ""
+	end
+	return string.gsub(mineralName, "%s+", "")
+end
+
 local function getPlayerMineralCount(player, mineralName)
-    if type(mineralName) ~= "string" then
-        return 0
-    end
-    local attrName = MINERAL_ATTRIBUTE_PREFIX .. mineralName
-    return math.max(0, math.floor(tonumber(player:GetAttribute(attrName)) or 0))
+	if type(mineralName) ~= "string" then
+		return 0
+	end
+	local attrName = MINERAL_ATTRIBUTE_PREFIX .. sanitizeMineralAttr(mineralName)
+	return math.max(0, math.floor(tonumber(player:GetAttribute(attrName)) or 0))
 end
 
 local function spendPlayerMineral(player, mineralName, amount)
-    if type(mineralName) ~= "string" or amount <= 0 then
-        return false
-    end
-    local attrName = MINERAL_ATTRIBUTE_PREFIX .. mineralName
-    local current = getPlayerMineralCount(player, mineralName)
-    if current < amount then
-        return false
-    end
-    player:SetAttribute(attrName, current - amount)
-    return true
+	if type(mineralName) ~= "string" or amount <= 0 then
+		return false
+	end
+	local attrName = MINERAL_ATTRIBUTE_PREFIX .. sanitizeMineralAttr(mineralName)
+	local current = getPlayerMineralCount(player, mineralName)
+	if current < amount then
+		return false
+	end
+	player:SetAttribute(attrName, current - amount)
+	return true
 end
 
 local function getPlayerBits(player)
@@ -324,10 +442,19 @@ local function getOrCreateProfile(player, savedData)
                 end
             end
         end
+        if type(savedData.monsterCounts) == "table" then
+            for monsterId, count in pairs(savedData.monsterCounts) do
+                if MonstersData[monsterId] then
+                    local safeCount = math.max(0, math.floor(tonumber(count) or 0))
+                    setMonsterCountInBackpack(backpack, monsterId, safeCount)
+                end
+            end
+        end
     end
 
     for _, item in ipairs(backpack) do
-        if item.Unlocked == true then
+        local count = getMonsterCountInBackpack(backpack, item.MonsterId)
+        if count > 0 then
             unlockedMonsters[item.MonsterId] = true
         end
     end
@@ -400,6 +527,7 @@ function TeamManager.setTeam(player, team)
     -- Propósito: Reemplazar el equipo activo de duelo del jugador.
     -- Precondiciones:
     --   1. team debe pasar validateTeam.
+    --   2. No puede usar mas copias de un Beastibit de las que tiene.
     -- Ubicación: ServerScriptService/Combat/TeamManager
     -- Retorna: boolean isValid, string reason
     local isValid, reason = TeamManager.validateTeam(team)
@@ -408,6 +536,19 @@ function TeamManager.setTeam(player, team)
     end
 
     local profile = getOrCreateProfile(player)
+
+    local usageCounts = {}
+    for _, pet in ipairs(team) do
+        usageCounts[pet.MonsterId] = (usageCounts[pet.MonsterId] or 0) + 1
+    end
+
+    for monsterId, used in pairs(usageCounts) do
+        local owned = getMonsterCountInBackpack(profile.backpack, monsterId)
+        if used > owned then
+            return false, "not-enough-copies"
+        end
+    end
+
     profile.duelTeam = cloneTeam(team)
     ensureBackpackHasTeamMonsters(profile.backpack, profile.duelTeam)
 
@@ -498,41 +639,25 @@ function TeamManager.isMonsterUnlocked(player, monsterId)
 end
 
 function TeamManager.unlockMonster(player, monsterId)
-    -- Propósito: Desbloquear un Beastibit en el perfil y mochila del jugador.
+    -- Propósito: Incrementar el contador de un Beastibit en el perfil del jugador (+1 copia).
     -- Precondiciones:
     --   1. monsterId debe existir en MonstersData.
     --   2. player debe ser instancia Player válida.
     -- Ubicación: ServerScriptService/Combat/TeamManager
-    -- Retorna: boolean wasNewlyUnlocked
+    -- Retorna: boolean wasFirstCopy
     if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
         return false
     end
 
     local profile = getOrCreateProfile(player)
-
-    if profile.unlockedMonsters[monsterId] then
-        return false
-    end
+    local wasZero = not isMonsterUnlockedInBackpack(profile.backpack, monsterId)
 
     profile.unlockedMonsters[monsterId] = true
 
-    local foundInBackpack = false
-    for _, item in ipairs(profile.backpack) do
-        if item.MonsterId == monsterId then
-            item.Unlocked = true
-            foundInBackpack = true
-            break
-        end
-    end
+    local currentCount = getMonsterCountInBackpack(profile.backpack, monsterId)
+    setMonsterCountInBackpack(profile.backpack, monsterId, currentCount + 1)
 
-    if not foundInBackpack then
-        table.insert(profile.backpack, {
-            MonsterId = monsterId,
-            Unlocked = true,
-        })
-    end
-
-    return true
+    return wasZero
 end
 
 function TeamManager.addFragments(player, monsterId, amount)
@@ -681,7 +806,14 @@ function TeamManager.getProfileData(player)
             xp[monsterId] = amount
         end
     end
-    return unlockedMonsters, fragments, bits, minerals, evolutions, xp
+    local monsterCounts = {}
+    for _, item in ipairs(profile.backpack) do
+        local count = getMonsterCountInBackpack(profile.backpack, item.MonsterId)
+        if count > 0 then
+            monsterCounts[item.MonsterId] = count
+        end
+    end
+    return unlockedMonsters, fragments, bits, minerals, evolutions, xp, monsterCounts
 end
 
 function TeamManager.getMonsterEvolution(player, monsterId)
@@ -698,6 +830,15 @@ function TeamManager.getMonsterXP(player, monsterId)
     end
     local profile = getOrCreateProfile(player)
     return getMonsterXPInProfile(profile, monsterId)
+end
+
+function TeamManager.getMonsterLevel(player, monsterId)
+    if type(monsterId) ~= "string" or MonstersData[monsterId] == nil then
+        return 1
+    end
+    local profile = getOrCreateProfile(player)
+    local xp = getMonsterXPInProfile(profile, monsterId)
+    return getLevelForXP(xp)
 end
 
 function TeamManager.evolveMonster(player, monsterId)
@@ -725,6 +866,12 @@ function TeamManager.evolveMonster(player, monsterId)
     local cost = EVOLUTION_COST[currentEvo]
     if not cost then
         return false, "no-cost-defined", currentEvo
+    end
+
+    local currentXP = getMonsterXPInProfile(profile, monsterId)
+    local currentLevel = getLevelForXP(currentXP)
+    if currentLevel < cost.levelRequired then
+        return false, "insufficient-level", currentEvo
     end
 
     local mineralName = getEvolutionMineralForMonster(monsterId)
@@ -794,14 +941,16 @@ function TeamManager.feedMonster(player, targetMonsterId, foodMonsterId)
     local foodEvo = getMonsterEvoInProfile(profile, foodMonsterId)
     local evoMult = EVO_XP_MULTIPLIER[foodEvo] or 1.0
 
-    local xpGained = math.floor(xpBase * evoMult)
+    local foodXP = getMonsterXPInProfile(profile, foodMonsterId)
+    local foodLevel = getLevelForXP(foodXP)
+    local levelMult = getLevelMultiplier(foodLevel)
 
-    profile.unlockedMonsters[foodMonsterId] = nil
-    for i, item in ipairs(profile.backpack) do
-        if item.MonsterId == foodMonsterId then
-            item.Unlocked = false
-            break
-        end
+    local xpGained = math.ceil(xpBase * evoMult * levelMult)
+
+    local currentFoodCount = getMonsterCountInBackpack(profile.backpack, foodMonsterId)
+    setMonsterCountInBackpack(profile.backpack, foodMonsterId, currentFoodCount - 1)
+    if currentFoodCount <= 1 then
+        profile.unlockedMonsters[foodMonsterId] = nil
     end
 
     local xpTable = ensureXPTable(profile)

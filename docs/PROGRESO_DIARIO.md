@@ -90,6 +90,7 @@ Ultima actualizacion: 2026-06-24
 ### Proximas tareas (Dia 3)
 
 #### Prioridad alta
+- [ ] Revisar bug en selector de comida del Craft: no muestra todos los Beastibits disponibles para alimentar (ej. DemonSlime solo mostro 2 opciones teniendo mas, TortugaPlanta no aparecio como opcion)
 - [ ] Agregar iconos/imagenes reales a los Beastibit nuevos
 - [ ] Mejorar feedback visual de captura (exito/fallo) en pantalla de resultado
 - [ ] Separar CombatServer en submodulos

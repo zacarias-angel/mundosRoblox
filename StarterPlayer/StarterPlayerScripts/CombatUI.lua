@@ -610,7 +610,7 @@ local duelResultCard = Instance.new("Frame")
 duelResultCard.Name = "ResultCard"
 duelResultCard.AnchorPoint = Vector2.new(0.5, 0.5)
 duelResultCard.Position = UDim2.new(0.5, 0, 0.5, 0)
-duelResultCard.Size = UDim2.new(0, 380, 0, 340)
+duelResultCard.Size = UDim2.new(0, 380, 0, 420)
 duelResultCard.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
 duelResultCard.BackgroundTransparency = 0.05
 duelResultCard.BorderSizePixel = 0
@@ -676,7 +676,7 @@ local duelResultDropsArea = Instance.new("Frame")
 duelResultDropsArea.Name = "DropsArea"
 duelResultDropsArea.AnchorPoint = Vector2.new(0.5, 0)
 duelResultDropsArea.Position = UDim2.new(0.5, 0, 0, 194)
-duelResultDropsArea.Size = UDim2.new(0.9, 0, 0, 80)
+duelResultDropsArea.Size = UDim2.new(0.9, 0, 0, 130)
 duelResultDropsArea.BackgroundColor3 = Color3.fromRGB(22, 26, 40)
 duelResultDropsArea.BackgroundTransparency = 0.1
 duelResultDropsArea.BorderSizePixel = 0
@@ -693,9 +693,36 @@ duelResultDropsLabel.BackgroundTransparency = 1
 duelResultDropsLabel.Font = Enum.Font.Gotham
 duelResultDropsLabel.TextSize = 14
 duelResultDropsLabel.TextColor3 = Color3.fromRGB(120, 130, 160)
-duelResultDropsLabel.Text = "[ Drops próximamente ]"
+duelResultDropsLabel.Text = ""
 duelResultDropsLabel.ZIndex = 63
 duelResultDropsLabel.Parent = duelResultDropsArea
+
+local duelResultDropsLayout = Instance.new("UIListLayout")
+duelResultDropsLayout.Name = "DropsLayout"
+duelResultDropsLayout.FillDirection = Enum.FillDirection.Vertical
+duelResultDropsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+duelResultDropsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+duelResultDropsLayout.Padding = UDim.new(0, 2)
+duelResultDropsLayout.Parent = duelResultDropsArea
+
+local function makeDropLabel(name, color)
+    local label = Instance.new("TextLabel")
+    label.Name = name
+    label.Size = UDim2.new(1, -12, 0, 22)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+    label.Text = ""
+    label.ZIndex = 63
+    label.Parent = duelResultDropsArea
+    return label
+end
+
+local duelResultBitsLabel = makeDropLabel("BitsDrop", Color3.fromRGB(255, 220, 120))
+local duelResultCaptureLabel = makeDropLabel("CaptureDrop", Color3.fromRGB(180, 220, 255))
+local duelResultFragmentsLabel = makeDropLabel("FragmentsDrop", Color3.fromRGB(220, 190, 100))
+local duelResultMineralLabel = makeDropLabel("MineralDrop", Color3.fromRGB(160, 230, 160))
 
 -- Botón Continuar
 local duelResultContinueBtn = Instance.new("TextButton")
@@ -1546,13 +1573,16 @@ duelResultContinueBtn.MouseButton1Click:Connect(function()
     duelResultOverlay.Visible = false
 end)
 
-local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind, bitsDelta)
-    -- Propósito: Mostrar overlay de Victoria o Derrota con cambio de estrellas.
+local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind, bitsDelta, captureResult, fragmentsAwarded, mineralAwarded)
+    -- Propósito: Mostrar overlay de Victoria o Derrota con drops detallados (Bits, captura, fragmentos, minerales).
     -- Precondiciones:
     --   1. isVictory debe ser boolean.
-    --   2. starsDelta puede ser number o nil (0 si es beastibit sin cambio de stars).
+    --   2. starsDelta puede ser number o nil.
     --   3. newStarsTotal puede ser number o nil.
     --   4. opponentKind puede ser "player" o "monster".
+    --   5. captureResult puede ser tabla con { captured, monsterId, wasNew, fragmentsDropped }.
+    --   6. fragmentsAwarded puede ser number.
+    --   7. mineralAwarded puede ser tabla con { name, total }.
     -- Ubicación: StarterPlayer/StarterPlayerScripts/CombatUI
     -- Retorna: nil
     local delta = tonumber(starsDelta) or 0
@@ -1589,28 +1619,70 @@ local function showDuelResult(isVictory, starsDelta, newStarsTotal, opponentKind
             duelResultStarsTotal.Visible = true
         end
     else
-        -- Beastibit: no hay cambio de stars PvP
         duelResultStarsDelta.Text = ""
         duelResultStarsTotal.Visible = false
     end
 
-    if isVictory then
-        local rewardBits = safeBitsDelta
-        if rewardBits <= 0 and kind == "monster" then
-            rewardBits = 50
-        end
+    -- Bits
+    local rewardBits = safeBitsDelta
+    if rewardBits <= 0 and kind == "monster" then
+        rewardBits = 50
+    end
 
-        if rewardBits > 0 then
-            duelResultDropsLabel.Text = "[$] +" .. tostring(rewardBits) .. " Bits"
-            duelResultDropsLabel.TextColor3 = Color3.fromRGB(255, 220, 120)
-        else
-            duelResultDropsLabel.Text = "[$] +50 Bits"
-            duelResultDropsLabel.TextColor3 = Color3.fromRGB(255, 220, 120)
+    if isVictory and rewardBits > 0 then
+        duelResultBitsLabel.Text = "[$] +" .. tostring(rewardBits) .. " Bits"
+        duelResultBitsLabel.Visible = true
+    elseif isVictory then
+        duelResultBitsLabel.Text = "[$] +" .. tostring(rewardBits) .. " Bits"
+        duelResultBitsLabel.Visible = true
+    else
+        duelResultBitsLabel.Text = "[$] +0 Bits"
+        duelResultBitsLabel.Visible = true
+    end
+
+    -- Capture / Fragmentos (solo PvE)
+    if kind == "monster" and type(captureResult) == "table" then
+        if captureResult.captured then
+            local monsterName = captureResult.monsterId
+            local monsterData = MonstersData[captureResult.monsterId]
+            if monsterData and type(monsterData.Name) == "string" then
+                monsterName = monsterData.Name
+            else
+                monsterName = captureResult.monsterId or "?"
+            end
+            local extra = captureResult.wasNew and " (NUEVO)" or " (ya lo tenias)"
+            duelResultCaptureLabel.Text = "[Captura] " .. monsterName .. extra
+            duelResultCaptureLabel.TextColor3 = Color3.fromRGB(120, 255, 180)
+            duelResultCaptureLabel.Visible = true
+        elseif captureResult.captured == false then
+            local frags = tonumber(captureResult.fragmentsDropped) or 0
+            duelResultCaptureLabel.Text = "[Captura fallida] +" .. tostring(frags) .. " fragmentos"
+            duelResultCaptureLabel.TextColor3 = Color3.fromRGB(255, 190, 80)
+            duelResultCaptureLabel.Visible = true
         end
     else
-        duelResultDropsLabel.Text = "[$] +0 Bits"
-        duelResultDropsLabel.TextColor3 = Color3.fromRGB(120, 130, 160)
+        duelResultCaptureLabel.Visible = false
     end
+
+    -- Fragmentos adicionales (por si se envían aparte)
+    local extraFrags = tonumber(fragmentsAwarded) or 0
+    if extraFrags > 0 and kind == "monster" and not (type(captureResult) == "table" and captureResult.captured == false) then
+        duelResultFragmentsLabel.Text = "[Fragmentos] +" .. tostring(extraFrags)
+        duelResultFragmentsLabel.Visible = true
+    else
+        duelResultFragmentsLabel.Visible = false
+    end
+
+    -- Mineral
+    if kind == "monster" and type(mineralAwarded) == "table" and type(mineralAwarded.name) == "string" then
+        duelResultMineralLabel.Text = "[Mineral] +1 " .. tostring(mineralAwarded.name)
+        duelResultMineralLabel.Visible = true
+    else
+        duelResultMineralLabel.Visible = false
+    end
+
+    -- Hide old single label
+    duelResultDropsLabel.Visible = false
 
     duelResultOverlay.Visible = true
 end
@@ -2741,7 +2813,7 @@ CombatDuelState.OnClientEvent:Connect(function(data)
         local deltaStars = tonumber(data.starsDelta) or 0
         local newStarsTotal = tonumber(data.newSelfStars)
 
-        showDuelResult(isVictory, deltaStars, newStarsTotal, endedOpponentKind, data.bitsDelta)
+        showDuelResult(isVictory, deltaStars, newStarsTotal, endedOpponentKind, data.bitsDelta, data.captureResult, data.fragmentsAwarded, data.mineralAwarded)
 
         local endMsg
         if isVictory then

@@ -335,7 +335,7 @@ Archivo principal: ServerScriptService/Combat/TeamManager.lua
 - Funcion feedMonster: sacrifica un Beastibit para dar XP a otro.
 - XP base por rareza del alimento: Comun 10, Raro 25, Epico 60, Legendario 150.
 - Multiplicador por evolucion del alimento: Evo1 x1.0, Evo2 x1.75, Evo3 x3.0.
-- Protecciones: no se puede sacrificar equipo activo ni seguidor.
+- Protecciones: no se puede sacrificar si deja al team sin copias suficientes (Count > teamCopies). El seguidor se cambia automaticamente si es sacrificado.
 - Confirmacion visual en UI antes de sacrificar (overlay de seleccion).
 - XP persistida en DataStore BackpackV1.
 

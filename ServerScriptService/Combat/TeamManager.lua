@@ -222,7 +222,11 @@ local function setMonsterCountInBackpack(backpack, monsterId, count)
             return safeCount
         end
     end
-    return 0
+    table.insert(backpack, {
+        MonsterId = monsterId,
+        Count = safeCount,
+    })
+    return safeCount
 end
 
 local function getDefaultTeam()
@@ -924,14 +928,17 @@ function TeamManager.feedMonster(player, targetMonsterId, foodMonsterId)
         return false, "food-locked", 0, 0
     end
 
+    local currentFoodCount = getMonsterCountInBackpack(profile.backpack, foodMonsterId)
+
+    local teamCopies = 0
     for _, pet in ipairs(profile.duelTeam) do
         if pet.MonsterId == foodMonsterId then
-            return false, "food-in-team", 0, 0
+            teamCopies = teamCopies + 1
         end
     end
 
-    if profile.selectedFollowerMonsterId == foodMonsterId then
-        return false, "food-is-follower", 0, 0
+    if currentFoodCount - 1 < teamCopies then
+        return false, "food-in-team", 0, 0
     end
 
     local foodData = MonstersData[foodMonsterId]
@@ -947,7 +954,6 @@ function TeamManager.feedMonster(player, targetMonsterId, foodMonsterId)
 
     local xpGained = math.ceil(xpBase * evoMult * levelMult)
 
-    local currentFoodCount = getMonsterCountInBackpack(profile.backpack, foodMonsterId)
     setMonsterCountInBackpack(profile.backpack, foodMonsterId, currentFoodCount - 1)
     if currentFoodCount <= 1 then
         profile.unlockedMonsters[foodMonsterId] = nil

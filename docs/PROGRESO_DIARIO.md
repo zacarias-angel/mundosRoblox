@@ -87,10 +87,22 @@ Ultima actualizacion: 2026-06-24
 
 ---
 
+## Dia 3 - 2026-06-24: Fixes
+
+### Lo que se hizo
+
+#### Fixes
+- [X] Bug en selector de comida del Craft arreglado. El filtro de Beastibits disponibles para alimentar bloqueaba cualquier monstruo en el equipo o seguidor, incluso con copias sobrantes. Ahora verifica `Count > teamCopies` (hay copias sobrantes). Sin filtro de seguidor (el server hace switch automatico al sacrificarlo).
+  - Archivos: `TeamManager.lua:931-942` (feedMonster), `RosterUI.client.lua:1284-1294` (food selector)
+- [X] `setMonsterCountInBackpack` ahora inserta entradas nuevas si el monstruo no existe en la mochila (antes retornaba 0 silenciosamente).
+
+---
+
 ### Proximas tareas (Dia 3)
 
 #### Prioridad alta
-- [ ] Revisar bug en selector de comida del Craft: no muestra todos los Beastibits disponibles para alimentar (ej. DemonSlime solo mostro 2 opciones teniendo mas, TortugaPlanta no aparecio como opcion)
+- [X] Revisar bug en selector de comida del Craft: no muestra todos los Beastibits disponibles para alimentar (ej. DemonSlime solo mostro 2 opciones teniendo mas, TortugaPlanta no aparecio como opcion)
+  - **Fix**: El filtro del selector y la validacion del servidor bloqueaban cualquier Beastibit en el equipo o seguidor, incluso con copias sobrantes. Ahora verifica `Count > teamCopies` (hay copias sobrantes mas alla de las que necesita el team). Sin filtro de seguidor (el server hace switch automatico). Tambien se arreglo setMonsterCountInBackpack para que inserte entradas nuevas si el monstruo no existe en la mochila.
 - [ ] Agregar iconos/imagenes reales a los Beastibit nuevos
 - [ ] Mejorar feedback visual de captura (exito/fallo) en pantalla de resultado
 - [ ] Separar CombatServer en submodulos

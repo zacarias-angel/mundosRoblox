@@ -1282,16 +1282,15 @@ local function buildCraftTab()
 		feedConfirmButtons = {}
 		local idx = 0
 		for _, item in ipairs(rosterBackpack) do
-			if (tonumber(item.Count) or 0) > 0 and item.MonsterId ~= craftTargetMonsterId then
-				-- Exclude team and follower
-				local inTeam = false
+			local itemCount = tonumber(item.Count) or 0
+			if itemCount > 0 and item.MonsterId ~= craftTargetMonsterId then
+				local teamCopies = 0
 				for _, pet in ipairs(rosterDuelTeam) do
 					if pet and pet.MonsterId == item.MonsterId then
-						inTeam = true
-						break
+						teamCopies = teamCopies + 1
 					end
 				end
-				if not inTeam and item.MonsterId ~= selectedFollowerMonsterId then
+				if itemCount > teamCopies then
 					idx = idx + 1
 					local fb = Instance.new("ImageButton")
 					fb.Name = "FeedOpt_" .. item.MonsterId

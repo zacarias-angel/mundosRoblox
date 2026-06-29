@@ -1,6 +1,6 @@
 # Progreso Diario - Mundos Roblox
 
-Ultima actualizacion: 2026-06-24
+Ultima actualizacion: 2026-06-29
 
 ---
 
@@ -87,41 +87,58 @@ Ultima actualizacion: 2026-06-24
 
 ---
 
-## Dia 3 - 2026-06-24: Fixes
+## Dia 3 - 2026-06-29: Animacion de Companion (intento) y Estandar de Modelos
 
 ### Lo que se hizo
 
-#### Fixes
-- [X] Bug en selector de comida del Craft arreglado. El filtro de Beastibits disponibles para alimentar bloqueaba cualquier monstruo en el equipo o seguidor, incluso con copias sobrantes. Ahora verifica `Count > teamCopies` (hay copias sobrantes). Sin filtro de seguidor (el server hace switch automatico al sacrificarlo).
-  - Archivos: `TeamManager.lua:931-942` (feedMonster), `RosterUI.client.lua:1284-1294` (food selector)
-- [X] `setMonsterCountInBackpack` ahora inserta entradas nuevas si el monstruo no existe en la mochila (antes retornaba 0 silenciosamente).
+#### Animacion de companion (FireBaby) - IMPLEMENTADO, PENDIENTE DE MODELO
+- [X] `resolveCompanionAnimations()` agregado a PetCubeService: detecta AnimationController en el modelo clonado, carga Idle/Walk por nombre heuristico
+- [X] `createFollowerModel()` carga las animaciones al spawnear y las guarda en `followerState.animations`
+- [X] `stepFollower()` reproduce Idle si esta quieto, Walk con AdjustSpeed si se mueve
+- [X] `stopFollowerTracking()` limpia tracks al destruir el companion
+- [ ] **NO FUNCIONO**: el modelo FireBaby no reprodujo la animacion de caminar. El codigo esta listo pero el modelo no cumple los requisitos tecnicos para que AnimationController funcione (falta rig, Humanoid, o estructura de huesos correcta).
 
----
+### Tareas Pausadas (Dia 3)
 
-### Proximas tareas (Dia 3)
-
-#### Prioridad alta
-- [X] Revisar bug en selector de comida del Craft: no muestra todos los Beastibits disponibles para alimentar (ej. DemonSlime solo mostro 2 opciones teniendo mas, TortugaPlanta no aparecio como opcion)
-  - **Fix**: El filtro del selector y la validacion del servidor bloqueaban cualquier Beastibit en el equipo o seguidor, incluso con copias sobrantes. Ahora verifica `Count > teamCopies` (hay copias sobrantes mas alla de las que necesita el team). Sin filtro de seguidor (el server hace switch automatico). Tambien se arreglo setMonsterCountInBackpack para que inserte entradas nuevas si el monstruo no existe en la mochila.
 - [ ] Agregar iconos/imagenes reales a los Beastibit nuevos
 - [ ] Mejorar feedback visual de captura (exito/fallo) en pantalla de resultado
 - [ ] Separar CombatServer en submodulos
-
-#### Prioridad media
 - [ ] Ajustar balance de stats por evolucion
 - [ ] Mostrar VFX al evolucionar un Beastibit
 - [ ] Preparar modelos 3D para nuevos Beastibit
-
-#### Prioridad baja
-- [ ] Agregar animaciones de locomocion para companion
 - [ ] Optimizar rendimiento movil del dashboard
 - [ ] Validar anti-spam en acciones de craft/evolve
 
 ---
 
-### Notas
-- Los elementos del combate son 5: Fuego, Agua, Planta, Electricidad, Roca
-- "Energia" es un bioma de Korvaxis, NO un elemento
-- Bit Spheres eliminadas del diseno final
-- 20 Beastibits totales: 14 Bitara Prime + 6 Korvaxis
-- Niveles 1-60 continuos, evolucion desbloquea por rango de nivel
+## Dia 3 (Continuacion) - Proxima Sesion
+
+### Tareas pendientes
+
+#### Prioridad alta - Estandar de modelos Beastibit
+- [ ] Definir contrato tecnico obligatorio para que las animaciones funcionen en todos los modelos
+- [ ] Documentar que necesita un modelo: Humanoid, rig (Motor6D/Skin), AnimationController/Animator
+- [ ] Crear guia de preparacion de modelos para artistas (ver DOCUMENTO_FINAL_CONGELACION_V1.md seccion 7.12)
+- [ ] Estandarizar FireBaby y todos los modelos futuros bajo el mismo contrato
+
+#### Prioridad alta - Revision de combate
+- [ ] Revisar el sistema de combate completo (PvE y PvP)
+- [ ] Identificar y corregir bugs existentes
+- [ ] Bug: al terminar la batalla el seguidor actual desaparece (no se vuelve a spawnear)
+- [ ] Posicionar correctamente los modelos 3D en formacion de duelo
+
+#### Evaluacion tecnica
+- [ ] Evaluar si al batallar conviene abrir una nueva escena/espacio separado para no interferir con el mundo abierto
+  - Ventaja: no hay colisiones con terreno, otros jugadores ni mobs salvajes
+  - Desventaja: quita inmersion, requiere transicion de escena
+  - Alternativa: mantener en el mismo mundo pero con zona segura y cleanup al terminar
+
+#### Prioridad media
+- [ ] Agregar iconos/imagenes reales a los Beastibit nuevos (MonstersData.img)
+- [ ] Mejorar feedback visual de captura (exito/fallo) en pantalla de resultado
+
+#### Prioridad baja
+- [ ] Separar CombatServer en submodulos
+- [ ] Ajustar balance de stats por evolucion
+- [ ] Mostrar VFX al evolucionar un Beastibit
+- [ ] Wandering/patrulla para Beastibits salvajes (animacion Idle + Walk lateral)

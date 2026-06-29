@@ -28,6 +28,22 @@ Monsters.SlimeFuego = {
     },
 }
 
+Monsters.FireBaby = {
+	Name = "FireBaby",
+	Element = "Fuego",
+	Rarity = "Common",
+	StarterUnlocked = true,
+	BaseStats = {
+		Attack = 150,
+		HP = 3000,
+		Speed = 1,
+	},
+    img = {
+        evo1 = "rbxassetid://0",
+        evo2 = "rbxassetid://0",
+        evo3 = "rbxassetid://0",
+    },
+}
 Monsters.LoboAgua = {
     Name = "Lobo de Agua",
     Element = "Agua",
@@ -95,11 +111,7 @@ Monsters.Demonslime1 = {
 		CatchupDistance = 7,
 		TeleportDistance = 24,
 	},
-	img = {
-		evo1 = "rbxassetid://133572570435726",
-		evo2 = "rbxassetid://133572570435726",
-		evo3 = "rbxassetid://133572570435726",
-	},
+	 
 	evoActual = 1,
 	ModelTemplate = "Demonslime1",
 	StarterUnlocked = true,

@@ -133,7 +133,7 @@ Estado: FUNCIONAL BASE
 
 ## 3.6 Beastibit seguidor 3D (nuevo avance)
 
-Estado: IMPLEMENTADO (BASE ESTABLE)
+Estado: IMPLEMENTADO (BASE ESTABLE + ANIMACIONES)
 
 Archivo principal: ServerScriptService/Combat/PetCubeService.lua
 
@@ -148,6 +148,7 @@ Funcionalidad actual:
 - Follow organico en servidor con lerp/catch-up/teleport de seguridad.
 - Follow adaptado a gravedad planetaria (usa UpVector local del personaje, no eje Y global).
 - Configuracion de follow y orientacion movida a MonstersData por especie (CompanionFollow), evitando depender de muchos atributos en el modelo template.
+- **Animacion de locomocion del companion** (nuevo): detecta AnimationController en el modelo clonado, carga animaciones Idle/Walk por heuristica de nombres (o usa la unica disponible como walk). Durante el follow reproduce Idle si esta quieto y Walk con speed scaling si se mueve. Limpieza automatica al destruir el companion. Sin cambios necesarios en MonstersData.
 
 ## 3.7 Sistema de Captura, Fragmentos y Minerales (Fase 1)
 
@@ -282,6 +283,7 @@ Nota de estado:
 27. 20 Beastibits definidos: nuevas especies Bloompup, Pebblit, Sparkhog, Stormram, Infervex, Leviacode, Elderthorn, Titanox, Nullbyte.
 28. SpawnMatrix con distribucion por bioma, niveles y minerales por planeta.
 29. Eliminacion de Bit Spheres: captura directa sin recurso externo.
+30. Animacion de locomocion para Beastibit companion: detecta AnimationController del modelo, reproduce Idle/Walk segun movimiento del follow (PetCubeService.lua).
 
 ## 7. Lo Que Falta O Requiere Pulido
 
@@ -383,15 +385,22 @@ Archivo principal: ServerScriptService/Combat/PvpStarsService.lua
 
 ## 7.11 Beastibit seguidor 3D
 
-- Calibrar valores CompanionFollow por especie para pose final (yaw/pitch/roll, distancia y altura).
-- Estandarizar pivote/origen de modelos template para reducir offsets extremos.
-- Preparar animaciones reales de locomocion companion (actualmente follow por PivotTo).
+- [X] Calibrar valores CompanionFollow por especie para pose final (yaw/pitch/roll, distancia y altura).
+- [X] Estandarizar pivote/origen de modelos template para reducir offsets extremos.
+- [X] Preparar animaciones reales de locomocion companion (actualmente follow por PivotTo).
+- [ ] Revisar bug: al terminar batalla el seguidor actual desaparece y no se vuelve a spawnear.
 
-## 7.12 Normalizacion de modelos Beastibit (nuevo)
+## 7.12 Combate en mundo abierto (nuevo)
+
+- [ ] Evaluar si abrir escena separada para duelos o mantener en mundo abierto con zona segura.
+- [ ] Posicionar correctamente modelos 3D en formacion de duelo (offsets por especie en DuelLinePlacement).
+- [ ] Prevenir interferencias: terreno, otros jugadores, mobs salvajes durante el duelo.
+
+## 7.13 Normalizacion de modelos Beastibit (ACTUALIZADO - incluye animaciones)
 
 Objetivo:
 
-- Garantizar que todos los modelos 3D Beastibit entren al juego con el mismo contrato tecnico para evitar desfase, rotacion incorrecta, piezas separadas y fallos de VFX.
+- Garantizar que todos los modelos 3D Beastibit entren al juego con el mismo contrato tecnico para evitar desfase, rotacion incorrecta, piezas separadas, fallos de VFX y fallos de animacion.
 
 Contrato tecnico obligatorio por modelo (MVP):
 
@@ -406,27 +415,45 @@ Contrato tecnico obligatorio por modelo (MVP):
 - No usar partes Anchored dentro del template final para companions/duelo.
 - Mantener escala consistente por especie segun guia de tamano (evitar outliers extremos).
 
-Convencion de jerarquia recomendada:
+### Requisitos para animaciones (nuevo)
+
+Para que las animaciones Idle/Walk funcionen en el companion y futuros sistemas:
+
+**Opcion A - Humanoid + Animator (recomendado para R6/R15)**
+- El modelo debe contener un `Humanoid`.
+- El modelo debe tener un rig R6 o R15 con `Motor6D` joints desde el HumanoidRootPart a cada parte.
+- Las partes del rig deben seguir los nombres estandar Roblox (Head, Torso, LeftArm, etc. para R6).
+- El `AnimationController` o `Animator` debe ser hijo del `Humanoid`.
+- Las animaciones (`Animation` objects) deben estar en `ReplicatedStorage/Animations` con nombres "Idle", "Walk", "Jump".
+
+**Opcion B - AnimationController + MeshParts con huesos (recomendado para modelos personalizados)**
+- El modelo debe contener un `AnimationController`.
+- Las MeshParts deben tener `Skin` o vinculacion de huesos correcta.
+- Las animaciones (`Animation` objects) deben ser hijas directas del `AnimationController`.
+- Los nombres de las animaciones deben contener "idle"/"walk"/"run" (ej: "WalkAnim", "IdlePose") para deteccion automatica.
+- El AnimationController debe estar vinculado al rig del modelo.
+
+**Regla general:** si `AnimationController:LoadAnimation()` falla, el modelo no tiene la estructura correcta. PetCubeService usa `pcall` para fallar silenciosamente y seguir con follow sin animacion.
+
+Convencion de jerarquia recomendada (actualizada):
 
 - Model (nombre = MonsterId o ModelTemplate)
-- RootPart (PrimaryPart)
-- Geometry (mallas/piezas visuales)
-- Attachments opcionales para VFX (Muzzle, HitOrigin) cuando aplique
+  - HumanoidRootPart (PrimaryPart, root del rig)
+  - Humanoid (opcion A)
+  - AnimationController (opcion B, o hijo del Humanoid en opcion A)
+    - Animation (Walk/Idle/Jump)
+  - Geometry (mallas/piezas visuales)
+  - Attachments opcionales para VFX (Muzzle, HitOrigin)
 
-Campos de ajuste por especie (solo para excepciones):
-
-- CompanionFollow: offsets de seguimiento fuera de duelo.
-- DuelLinePlacement: offsets exclusivos para fila de duelo.
-- Regla: primero normalizar modelo en origen; offsets solo para ajuste fino, no para corregir modelos rotos.
-
-Pipeline de validacion antes de publicar un modelo:
+Pipeline de validacion antes de publicar un modelo (actualizado):
 
 1. Verificar PrimaryPart, orientacion y pivote en template.
 2. Verificar uniones internas (sin piezas sueltas).
-3. Probar spawn como follower (mundo abierto).
-4. Probar spawn en linea de duelo PvP y PvE.
-5. Verificar origen de proyectil/VFX sobre slot 1.
-6. Registrar offsets minimos en MonstersData solo si son necesarios.
+3. Verificar que las animaciones cargan (AnimationController:LoadAnimation no falla).
+4. Probar spawn como follower con animacion Walk/Idle (mundo abierto).
+5. Probar spawn en linea de duelo PvP y PvE.
+6. Verificar origen de proyectil/VFX sobre slot 1.
+7. Registrar offsets minimos en MonstersData solo si son necesarios.
 
 Definicion de listo para produccion (Definition of Done):
 

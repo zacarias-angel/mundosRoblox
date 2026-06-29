@@ -96,6 +96,10 @@ local function stopFollowerTracking(player)
         state.connection:Disconnect()
         state.connection = nil
     end
+
+    if state.followerState and state.followerState.animations then
+        stopCompanionAnimations(state.followerState.animations)
+    end
 end
 
 local function getFollowUpVector(hrp, followerState)
@@ -200,6 +204,74 @@ local function resolveCompanionFollowConfig(monsterData)
     cfg.followTeleportDistance = tonumber(source and source.TeleportDistance) or FOLLOW_TELEPORT_DISTANCE
 
     return cfg
+end
+
+local function resolveCompanionAnimations(model)
+    -- Proposito: Detectar AnimationController en el modelo clonado y cargar tracks de Idle/Walk.
+    -- Precondiciones:
+    --   1. model debe ser Model valido.
+    -- Ubicacion: ServerScriptService/Combat/PetCubeService
+    -- Retorna: table|nil
+    local ac = model:FindFirstChildOfClass("AnimationController")
+    if not ac then
+        return nil
+    end
+
+    local idleTrack = nil
+    local walkTrack = nil
+    local otherTracks = {}
+
+    for _, child in ipairs(ac:GetChildren()) do
+        if child:IsA("Animation") and type(child.AnimationId) == "string" and child.AnimationId ~= "" then
+            local ok, track = pcall(function()
+                return ac:LoadAnimation(child)
+            end)
+            if ok and track then
+                track:Stop(0)
+                local lowerName = string.lower(child.Name)
+                if lowerName:find("idle") or lowerName:find("quieto") or lowerName:find("stand") then
+                    idleTrack = track
+                elseif lowerName:find("walk") or lowerName:find("run") or lowerName:find("caminar") or lowerName:find("andar") or lowerName:find("move") then
+                    walkTrack = track
+                else
+                    table.insert(otherTracks, track)
+                end
+            end
+        end
+    end
+
+    if not walkTrack and #otherTracks > 0 then
+        walkTrack = otherTracks[1]
+        table.remove(otherTracks, 1)
+    end
+    if not idleTrack and #otherTracks > 0 then
+        idleTrack = otherTracks[1]
+        table.remove(otherTracks, 1)
+    end
+
+    if not walkTrack and not idleTrack then
+        return nil
+    end
+
+    return {
+        idleTrack = idleTrack,
+        walkTrack = walkTrack,
+    }
+end
+
+local function stopCompanionAnimations(animationState)
+    -- Proposito: Detener y limpiar tracks de animacion del companion.
+    -- Precondiciones:
+    --   1. animationState puede ser nil.
+    -- Ubicacion: ServerScriptService/Combat/PetCubeService
+    -- Retorna: nil
+    if not animationState then return end
+    if animationState.idleTrack then
+        pcall(function() animationState.idleTrack:Stop(0.1) end)
+    end
+    if animationState.walkTrack then
+        pcall(function() animationState.walkTrack:Stop(0.1) end)
+    end
 end
 
 local function resolveDuelLineConfig(monsterData)
@@ -419,6 +491,8 @@ end
         return nil
     end
 
+    local animations = resolveCompanionAnimations(model)
+
     return {
         instance = model,
         rootPart = rootPart,
@@ -432,6 +506,7 @@ end
         followCatchupSpeed = companionConfig.followCatchupSpeed,
         followCatchupDistance = companionConfig.followCatchupDistance,
         followTeleportDistance = companionConfig.followTeleportDistance,
+        animations = animations,
     }
 end
 
@@ -607,8 +682,31 @@ local function startFollowerTracking(player, followerState, hrp, character)
         local followLerpBaseSpeed = getFollowerConfigValue(followerState, "followLerpBaseSpeed", FOLLOW_LERP_BASE_SPEED)
         local followCatchupSpeed = getFollowerConfigValue(followerState, "followCatchupSpeed", FOLLOW_CATCHUP_SPEED)
 
+        local anims = followerState.animations
+
         if distanceToGoal <= FOLLOW_POSITION_EPSILON then
+            if anims then
+                if anims.walkTrack and anims.walkTrack.IsPlaying then
+                    anims.walkTrack:Stop(0.15)
+                end
+                if anims.idleTrack and not anims.idleTrack.IsPlaying then
+                    anims.idleTrack:Play(0.15)
+                end
+            end
             return
+        end
+
+        if anims then
+            if anims.idleTrack and anims.idleTrack.IsPlaying then
+                anims.idleTrack:Stop(0.15)
+            end
+            if anims.walkTrack then
+                if not anims.walkTrack.IsPlaying then
+                    anims.walkTrack:Play(0.15)
+                end
+                local speedScale = math.clamp(distanceToGoal / 3, 0.5, 1.5)
+                anims.walkTrack:AdjustSpeed(speedScale)
+            end
         end
 
         if distanceToGoal >= followTeleportDistance then
@@ -632,6 +730,7 @@ local function startFollowerTracking(player, followerState, hrp, character)
         follower = followerState.instance,
         hrp = hrp,
         connection = connection,
+        followerState = followerState,
     }
 end
 

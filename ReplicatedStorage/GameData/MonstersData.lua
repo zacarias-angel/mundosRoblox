@@ -4,18 +4,6 @@
 
 local Monsters = {}
 
-local function createDefaultEvolutionImages()
-    -- Propósito: Crear arreglo base de 3 slots de imagen para evoluciones.
-    -- Precondiciones: Ninguna.
-    -- Ubicación: ReplicatedStorage/GameData/MonstersData
-    -- Retorna: table
-    return {
-        "rbxassetid://0",
-        "rbxassetid://0",
-        "rbxassetid://0",
-    }
-end
-
 Monsters.SlimeFuego = {
     Name = "Slime de Fuego",
     Element = "Fuego",
@@ -38,11 +26,7 @@ Monsters.FireBaby = {
 		HP = 3000,
 		Speed = 1,
 	},
-    img = {
-        evo1 = "rbxassetid://0",
-        evo2 = "rbxassetid://0",
-        evo3 = "rbxassetid://0",
-    },
+	Image = "rbxassetid://0",
 }
 Monsters.LoboAgua = {
     Name = "Lobo de Agua",
@@ -96,6 +80,7 @@ Monsters.Demonslime1 = {
 	Name = "Demon Slime",
 	Element = "Fuego",
 	Rarity = "Rare",
+	Image = "rbxassetid://133572570435726",
 	CompanionFollow = {
 		UsePlanetUp = true,
 		YawOffsetDeg = 180,
@@ -112,7 +97,6 @@ Monsters.Demonslime1 = {
 		TeleportDistance = 24,
 	},
 	 
-	evoActual = 1,
 	ModelTemplate = "Demonslime1",
 	StarterUnlocked = true,
 	BaseStats = {
@@ -174,12 +158,7 @@ Monsters.ObsidianaToro = {
     Name = "Obsidiana Toro",
     Element = "Roca",
     Rarity = "Rare",
-    img = {
-        evo1 = "rbxassetid://0",
-        evo2 = "rbxassetid://0",
-        evo3 = "rbxassetid://0",
-    },
-    evoActual = 1,
+    Image = "rbxassetid://0",
     StarterUnlocked = false,
     BaseStats = {
         Attack = 188,
@@ -294,58 +273,31 @@ Monsters.Nullbyte = {
         HP = 6200,
         Speed = 1,
     },
+    img = "rbxassetid://0"
 }
 
 for monsterId, monsterData in pairs(Monsters) do
-    -- Propósito: Garantizar nuevos campos visuales y de evolución para todos los Beastibit.
-    -- Precondiciones:
-    --   1. monsterData debe ser tabla válida.
-    -- Ubicación: ReplicatedStorage/GameData/MonstersData
-    -- Retorna: nil
-    if type(monsterData.Img) ~= "table" then
-        monsterData.Img = createDefaultEvolutionImages()
-    end
+	-- Propósito: Garantizar campos mínimos para todos los Beastibit.
+	-- Precondiciones:
+	--   1. monsterData debe ser tabla válida.
+	-- Ubicación: ReplicatedStorage/GameData/MonstersData
+	-- Retorna: nil
 
-    if #monsterData.Img < 3 then
-        for i = #monsterData.Img + 1, 3 do
-            monsterData.Img[i] = "rbxassetid://0"
-        end
-    end
+	if type(monsterData.Image) ~= "string" or monsterData.Image == "" then
+		if type(monsterData.img) == "table" then
+			monsterData.Image = monsterData.img.evo1 or monsterData.img.evo2 or monsterData.img.evo3
+		end
+		if (not monsterData.Image or monsterData.Image == "") and type(monsterData.Img) == "table" and #monsterData.Img >= 1 then
+			monsterData.Image = monsterData.Img[1]
+		end
+		if not monsterData.Image or monsterData.Image == "" then
+			monsterData.Image = "rbxassetid://0"
+		end
+	end
 
-    if type(monsterData.img) ~= "table" then
-        monsterData.img = {
-            evo1 = monsterData.Img[1] or "rbxassetid://0",
-            evo2 = monsterData.Img[2] or "rbxassetid://0",
-            evo3 = monsterData.Img[3] or "rbxassetid://0",
-        }
-    else
-        if type(monsterData.img.evo1) ~= "string" or monsterData.img.evo1 == "" then
-            monsterData.img.evo1 = monsterData.Img[1] or "rbxassetid://0"
-        end
-        if type(monsterData.img.evo2) ~= "string" or monsterData.img.evo2 == "" then
-            monsterData.img.evo2 = monsterData.Img[2] or "rbxassetid://0"
-        end
-        if type(monsterData.img.evo3) ~= "string" or monsterData.img.evo3 == "" then
-            monsterData.img.evo3 = monsterData.Img[3] or "rbxassetid://0"
-        end
-    end
-
-    local evoRaw = monsterData.evoActual
-    if type(evoRaw) ~= "number" then
-        evoRaw = monsterData.Evo
-    end
-    local normalizedEvo = math.floor(tonumber(evoRaw) or 1)
-    normalizedEvo = math.clamp(normalizedEvo, 1, 3)
-    monsterData.evoActual = normalizedEvo
-    monsterData.Evo = normalizedEvo
-
-    monsterData.Img[1] = monsterData.img.evo1
-    monsterData.Img[2] = monsterData.img.evo2
-    monsterData.Img[3] = monsterData.img.evo3
-
-    if type(monsterData.ModelTemplate) ~= "string" or monsterData.ModelTemplate == "" then
-        monsterData.ModelTemplate = monsterId
-    end
+	if type(monsterData.ModelTemplate) ~= "string" or monsterData.ModelTemplate == "" then
+		monsterData.ModelTemplate = monsterId
+	end
 end
 
 return Monsters

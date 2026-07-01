@@ -1059,7 +1059,7 @@ local function buildCraftTab()
 	infoLabel.TextSize = 13
 	infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 	infoLabel.TextColor3 = Color3.fromRGB(185, 195, 215)
-	infoLabel.Text = "Selecciona un Beastibit para evolucionarlo o usarlo como comida."
+	infoLabel.Text = "Selecciona un Beastibit para ver sus stats o alimentarlo con un duplicado (cuesta Bits)."
 	infoLabel.ZIndex = 73
 	infoLabel.Parent = tab
 
@@ -1130,7 +1130,7 @@ local function buildCraftTab()
 	craftDetailEvo.TextSize = 12
 	craftDetailEvo.TextXAlignment = Enum.TextXAlignment.Left
 	craftDetailEvo.TextColor3 = Color3.fromRGB(180, 195, 220)
-	craftDetailEvo.Text = "Evolucion: 1 / 3"
+	craftDetailEvo.Text = "Nivel: 1"
 	craftDetailEvo.ZIndex = 74
 	craftDetailEvo.Parent = craftDetailFrame
 
@@ -1162,43 +1162,29 @@ local function buildCraftTab()
 
 	local craftDetailActions = Instance.new("Frame")
 	craftDetailActions.Name = "CraftDetailActions"
-	craftDetailActions.Position = UDim2.new(0, 12, 1, -120)
-	craftDetailActions.Size = UDim2.new(1, -24, 0, 108)
+	craftDetailActions.Position = UDim2.new(0, 12, 1, -90)
+	craftDetailActions.Size = UDim2.new(1, -24, 0, 78)
 	craftDetailActions.BackgroundTransparency = 1
 	craftDetailActions.ZIndex = 74
 	craftDetailActions.Parent = craftDetailFrame
 
-	local evolveButton = Instance.new("TextButton")
-	evolveButton.Name = "EvolveButton"
-	evolveButton.Position = UDim2.new(0, 0, 0, 0)
-	evolveButton.Size = UDim2.new(1, 0, 0, 32)
-	evolveButton.BackgroundColor3 = Color3.fromRGB(160, 80, 200)
-	evolveButton.BorderSizePixel = 0
-	evolveButton.Font = Enum.Font.GothamBold
-	evolveButton.TextSize = 14
-	evolveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	evolveButton.Text = "Evolucionar (Nvl 20 + 500 Bits + 10 minerales)"
-	evolveButton.ZIndex = 75
-	evolveButton.Parent = craftDetailActions
-	Instance.new("UICorner", evolveButton).CornerRadius = UDim.new(0, 7)
-
 	local feedButton = Instance.new("TextButton")
 	feedButton.Name = "FeedButton"
-	feedButton.Position = UDim2.new(0, 0, 0, 38)
+	feedButton.Position = UDim2.new(0, 0, 0, 0)
 	feedButton.Size = UDim2.new(1, 0, 0, 32)
 	feedButton.BackgroundColor3 = Color3.fromRGB(180, 120, 40)
 	feedButton.BorderSizePixel = 0
 	feedButton.Font = Enum.Font.GothamBold
 	feedButton.TextSize = 14
 	feedButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	feedButton.Text = "Alimentar (sacrifica otro Beastibit)"
+	feedButton.Text = "Alimentar (sacrifica duplicado + cuesta Bits)"
 	feedButton.ZIndex = 75
 	feedButton.Parent = craftDetailActions
 	Instance.new("UICorner", feedButton).CornerRadius = UDim.new(0, 7)
 
 	local craftButton = Instance.new("TextButton")
 	craftButton.Name = "CraftButton"
-	craftButton.Position = UDim2.new(0, 0, 0, 76)
+	craftButton.Position = UDim2.new(0, 0, 0, 38)
 	craftButton.Size = UDim2.new(1, 0, 0, 32)
 	craftButton.BackgroundColor3 = Color3.fromRGB(80, 160, 100)
 	craftButton.BorderSizePixel = 0
@@ -1255,14 +1241,6 @@ local function buildCraftTab()
 
 	local feedConfirmButtons = {}
 	local feedConfirming = false
-
-	evolveButton.MouseButton1Click:Connect(function()
-		if not craftTargetMonsterId then return end
-		CombatRosterAction:FireServer({
-			action = "evolve",
-			monsterId = craftTargetMonsterId,
-		})
-	end)
 
 	feedButton.MouseButton1Click:Connect(function()
 		if not craftTargetMonsterId then return end
@@ -1389,17 +1367,13 @@ local function buildCraftTab()
 				btn.MouseButton1Click:Connect(function()
 					craftTargetMonsterId = monsterId
 					local fragCount = rosterFragments[monsterId] or 0
-					local evo = rosterEvolutions[monsterId] or 1
 					local xp = rosterXP[monsterId] or 0
 					local lvl = rosterLevels[monsterId] or 1
-					local nextEvoXP = 0
-					if evo <= 2 then
-						nextEvoXP = 500
-					end
+					local bitsCost = lvl * 15
 					craftDetailIcon.Image = getMonsterImage(monsterId)
 					craftDetailName.Text = getMonsterDisplayName(monsterId)
-					craftDetailEvo.Text = "Evo " .. tostring(evo) .. "/3"
-					craftDetailXP.Text = "Nivel " .. tostring(lvl) .. "  |  XP: " .. tostring(xp)
+					craftDetailEvo.Text = "Nivel " .. tostring(lvl) .. "  |  Max 50"
+					craftDetailXP.Text = "XP: " .. tostring(xp) .. "  |  Costo alimentar: " .. tostring(bitsCost) .. " Bits"
 					craftDetailFrags.Text = "Fragmentos: " .. tostring(fragCount)
 					tabRefreshers["Craft"]()
 				end)
@@ -1478,7 +1452,6 @@ local function buildCraftTab()
 		-- Refresh detail panel for currently selected monster
 		if craftTargetMonsterId then
 			local fragCount = rosterFragments[craftTargetMonsterId] or 0
-			local evo = rosterEvolutions[craftTargetMonsterId] or 1
 			local xp = rosterXP[craftTargetMonsterId] or 0
 			local lvl = rosterLevels[craftTargetMonsterId] or 1
 			local isOwned = false
@@ -1491,8 +1464,9 @@ local function buildCraftTab()
 			craftDetailIcon.Image = getMonsterImage(craftTargetMonsterId)
 			craftDetailIcon.ImageColor3 = isOwned and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(80, 80, 80)
 			craftDetailName.Text = isOwned and getMonsterDisplayName(craftTargetMonsterId) or (getMonsterDisplayName(craftTargetMonsterId) .. " (no desbloqueado)")
-			craftDetailEvo.Text = isOwned and ("Evo " .. tostring(evo) .. "/3") or "Disponible por craft"
-			craftDetailXP.Text = isOwned and ("Nivel " .. tostring(lvl) .. "  |  XP: " .. tostring(xp)) or ""
+			craftDetailEvo.Text = isOwned and ("Nivel " .. tostring(lvl) .. "  |  Max 50") or "Disponible por craft"
+			local bitsCost = lvl * 15
+			craftDetailXP.Text = isOwned and ("XP: " .. tostring(xp) .. "  |  Costo alimentar: " .. tostring(bitsCost) .. " Bits") or ""
 			craftDetailFrags.Text = "Fragmentos: " .. tostring(fragCount)
 		end
 	end
@@ -1547,7 +1521,6 @@ local function applyRosterState(data)
 	rosterBackpack = type(data.backpack) == "table" and data.backpack or rosterBackpack
 	rosterDuelTeam = type(data.duelTeam) == "table" and data.duelTeam or rosterDuelTeam
 	rosterFragments = type(data.fragments) == "table" and data.fragments or rosterFragments
-	rosterEvolutions = type(data.evolutions) == "table" and data.evolutions or rosterEvolutions
 	rosterXP = type(data.monsterXP) == "table" and data.monsterXP or rosterXP
 	rosterLevels = type(data.monsterLevels) == "table" and data.monsterLevels or rosterLevels
 

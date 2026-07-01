@@ -59,7 +59,7 @@ Estado: Definición de diseño (Fase 0 - Fundación)
 - [ ] Crear 3 Beastibits comunes nuevos (1 Mundo 1, 2 Mundo 2)
 - [ ] Crear 1 Beastibit raro nuevo (Mundo 2)
 - [ ] Crear 5 Beastibits épico/legendarios (3 Mundo 1, 2 Mundo 2)
-- [ ] Definir nombre, stats base, evoluciones y modelo 3D para cada uno
+- [ ] Definir nombre, stats base y modelo 3D para cada uno (sin evoluciones)
 
 ---
 
@@ -69,10 +69,10 @@ Estado: Definición de diseño (Fase 0 - Fundación)
 
 | Recurso | Función |
 |---------|---------|
-| **Bits** | Moneda principal (evoluciones, items, inventario) |
+| **Bits** | Moneda principal (alimentación, items, inventario) |
 | **Capture Energy** | Energía para intentar captura (máx 100 diario) |
 | **Bit Spheres** | Recurso consumible de captura (reemplaza captura gratis) |
-| **Minerales Planetarios** | Materiales para evolución (específicos por planeta) |
+| **Minerales Planetarios** | Materiales (específicos por planeta, uso pendiente de redefinir) |
 
 ### 4.2 Energía de captura (CORREGIR vs código)
 
@@ -109,7 +109,7 @@ Los Bit Spheres se obtienen por drops, recompensas y eventos. No hay captura gra
 
 ## 5. Progresión de Beastibit
 
-### 5.1 Niveles y XP
+### 5.1 Niveles y XP (máx nivel 50)
 
 | Rareza | XP Base al alimentar |
 |--------|---------------------|
@@ -118,19 +118,15 @@ Los Bit Spheres se obtienen por drops, recompensas y eventos. No hay captura gra
 | Épico | 60 |
 | Legendario | 150 |
 
-Fórmula: `XP Final = XP Base × MultEvolución × MultNivel`
+Fórmula XP: `XP Final = XP Base × MultNivel`
 
-- Evo 1: ×1.0, Evo 2: ×1.75, Evo 3: ×3.0
-- El nivel del Beastibit usado como comida también multiplica
+Costo Bits: `NivelActual × 15` (se paga al alimentar, además del duplicado sacrificado)
 
-### 5.2 Evolución
+- El nivel del Beastibit usado como comida también multiplica la XP
 
-Cada Beastibit tiene 3 evoluciones:
+### 5.2 Sin evoluciones
 
-| Transición | Bits | Minerales |
-|-----------|------|-----------|
-| Evo 1 → Evo 2 | 500 | 10 del planeta |
-| Evo 2 → Evo 3 | 2500 | 30 del planeta |
+Los Beastibits **no evolucionan**. Suben de nivel (1 a 50) pero mantienen una sola forma. Esto elimina los costos de Bits + minerales para evolución.
 
 ### 5.3 Protecciones
 
@@ -163,9 +159,9 @@ Cada Beastibit tiene 3 evoluciones:
 | 1 | Nombre oficial de los 2 planetas | Alta |
 | 2 | Nombre de los 4 minerales planetarios (uno por bioma Mundo 1) | Alta |
 | 3 | Nombre de los 2 minerales del Mundo 2 | Alta |
-| 4 | Las 3 especies comunes nuevas (stats base) | Alta |
-| 5 | La 1 especie rara nueva (stats base) | Alta |
-| 6 | Las 5 especies épico/legendarias (stats base) | Alta |
+| 4 | Las 3 especies comunes nuevas (stats base, sin evo) | Alta |
+| 5 | La 1 especie rara nueva (stats base, sin evo) | Alta |
+| 6 | Las 5 especies épico/legendarias (stats base, sin evo) | Alta |
 | 7 | Distribución exacta de especies por bioma | Alta |
 | 8 | Niveles de spawn por bioma | Media |
 | 9 | Títulos PvP por hitos de estrellas | Media |
@@ -181,7 +177,7 @@ Una vez cerradas las decisiones de diseño arriba, el próximo paso técnico ser
 2. Implementar drops post-combate PvE (Bits, Bit Spheres, minerales)
 3. Implementar lógica de captura (consumir Bit Sphere + energía, roll de éxito)
 4. Conectar sistema de niveles/XP por alimentación
-5. Conectar costos de evolución (Bits + minerales)
+5. ~~Conectar costos de evolución (Bits + minerales)~~ → ELIMINADO (sin evoluciones)
 
 ---
 

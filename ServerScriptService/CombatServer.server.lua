@@ -2010,17 +2010,15 @@ local function sendRosterState(player, reason)
     local selectedFollowerMonsterId = TeamManager.getSelectedFollowerMonsterId(player)
     local allFragments = TeamManager.getAllFragments(player)
 
-    local evolutions = {}
-    local xp = {}
-    local levels = {}
-    for _, item in ipairs(backpack) do
-        local count = math.max(0, math.floor(tonumber(item.Count) or 0))
-        if count > 0 then
-            evolutions[item.MonsterId] = TeamManager.getMonsterEvolution(player, item.MonsterId)
-            xp[item.MonsterId] = TeamManager.getMonsterXP(player, item.MonsterId)
-            levels[item.MonsterId] = TeamManager.getMonsterLevel(player, item.MonsterId)
-        end
-    end
+	local xp = {}
+	local levels = {}
+	for _, item in ipairs(backpack) do
+		local count = math.max(0, math.floor(tonumber(item.Count) or 0))
+		if count > 0 then
+			xp[item.MonsterId] = TeamManager.getMonsterXP(player, item.MonsterId)
+			levels[item.MonsterId] = TeamManager.getMonsterLevel(player, item.MonsterId)
+		end
+	end
 
     local shieldCharges = PvpStarsService.getShieldCharges(player)
     local pvpTitle = PvpStarsService.getTitleForPlayer(player)
@@ -2037,7 +2035,6 @@ local function sendRosterState(player, reason)
         backpack = backpack,
         selectedFollowerMonsterId = selectedFollowerMonsterId,
         fragments = allFragments,
-        evolutions = evolutions,
         monsterXP = xp,
         monsterLevels = levels,
         shieldCharges = shieldCharges,
@@ -2160,26 +2157,12 @@ local function onCombatRosterAction(player, payload)
         return
     end
 
-    if payload.action == "set-duel-slot" then
-        applyDuelSlotSelection(player, payload)
-        return
-    end
+	if payload.action == "set-duel-slot" then
+		applyDuelSlotSelection(player, payload)
+		return
+	end
 
-    if payload.action == "evolve" then
-        if type(payload.monsterId) ~= "string" then
-            sendDuelState(player, { type = "roster-error", reason = "invalid-monster-id" })
-            return
-        end
-        local success, reason, newEvo = TeamManager.evolveMonster(player, payload.monsterId)
-        if not success then
-            sendDuelState(player, { type = "roster-error", reason = reason or "evolve-failed" })
-            return
-        end
-        sendRosterState(player, "evolved")
-        return
-    end
-
-    if payload.action == "feed" then
+	if payload.action == "feed" then
         if type(payload.targetMonsterId) ~= "string" or type(payload.foodMonsterId) ~= "string" then
             sendDuelState(player, { type = "roster-error", reason = "invalid-monster-ids" })
             return
@@ -2548,8 +2531,8 @@ Players.PlayerAdded:Connect(function(player)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
-    local unlockedMonsters, fragments, bits, minerals, evolutions, xp, monsterCounts = TeamManager.getProfileData(player)
-    BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, evolutions, xp, monsterCounts)
+	local unlockedMonsters, fragments, bits, minerals, xp, monsterCounts = TeamManager.getProfileData(player)
+	BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, xp, monsterCounts)
     PvpStarsService.onPlayerRemoving(player)
     cleanPlayerState(player)
 end)

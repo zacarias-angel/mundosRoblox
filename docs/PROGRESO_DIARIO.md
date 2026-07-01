@@ -35,16 +35,17 @@ Ultima actualizacion: 2026-06-29
 
 ---
 
-## Dia 2 - 2026-06-23/24: Fase 2 - Evolucion, Alimentacion, Craft y PvP
+## Dia 2 - 2026-06-23/24: Fase 2 - Alimentacion, Craft y PvP (EVOLUCION ELIMINADA 2026-06-30)
 
 ### Lo que se hizo
 
-#### Sistema de niveles y XP (segun sistema_captura_y_economia.md)
-- [X] Niveles 1-60 con tabla de milestones interpolada
-- [X] Nivel determina evolucion (1-20=evo1, 21-40=evo2, 41-60=evo3)
-- [X] Para evolucionar requiere nivel 20 o nivel 40 + Bits + minerales
+#### Sistema de niveles y XP (revisado 2026-06-30: sin evo, máx 50)
+- [X] Niveles 1-50 con tabla de milestones interpolada
+- [X] ~~Nivel determina evolucion~~ → ELIMINADO: sin evoluciones, solo niveles 1-50
+- [X] ~~Para evolucionar requiere nivel 20 o nivel 40 + Bits + minerales~~ → ELIMINADO
 - [X] Multiplicador de nivel del alimento al dar XP (0.8x a 3.0x)
-- [X] Formula: XP = Base_Rareza x Mult_Evo x Mult_Nivel (ceil)
+- [X] Formula: XP = Base_Rareza x Mult_Nivel (ceil)
+- [X] Costo en Bits por alimentacion: NivelActual × 15
 
 #### Refactor de backpack (duplicados)
 - [X] Backpack: `Unlocked (bool)` -> `Count (number)`
@@ -53,10 +54,10 @@ Ultima actualizacion: 2026-06-29
 - [X] Validacion en Team: no mas copias de las disponibles
 - [X] Persistencia de Count en BackpackDataStore (monsterCounts)
 
-#### Sistema de evolucion
-- [X] evolveMonster: valida nivel + Bits + minerales
-- [X] Costos: 500/2500 Bits + 10/30 minerales planetarios
-- [X] Mineral mapeado por elemento
+#### Sistema de evolucion → ELIMINADO (2026-06-30)
+- [X] ~~evolveMonster~~ → ELIMINADO: los Beastibits ya no evolucionan
+- [X] ~~Costos: 500/2500 Bits + 10/30 minerales~~ → ELIMINADO
+- [X] ~~Mineral mapeado por elemento~~ → pendiente de redefinir uso de minerales
 
 #### Sistema de alimentacion
 - [X] feedMonster: sacrifica duplicado, da XP con formula completa
@@ -74,7 +75,7 @@ Ultima actualizacion: 2026-06-29
 #### UI
 - [X] Inventario como cuadricula (Beastibits con xN, minerales, fragmentos)
 - [X] Beastibit tab con badges de cantidad xN
-- [X] Craft tab: Nivel + XP + evolucion, auto-refresh al sync
+- [X] Craft tab: Nivel + XP, auto-refresh al sync
 - [X] Pantalla resultado PvE: captura, fragmentos, minerales
 - [X] Iconos de color como placeholder por elemento/rareza
 
@@ -103,42 +104,35 @@ Ultima actualizacion: 2026-06-29
 - [ ] Agregar iconos/imagenes reales a los Beastibit nuevos
 - [ ] Mejorar feedback visual de captura (exito/fallo) en pantalla de resultado
 - [ ] Separar CombatServer en submodulos
-- [ ] Ajustar balance de stats por evolucion
-- [ ] Mostrar VFX al evolucionar un Beastibit
+- [ ] ~~Ajustar balance de stats por evolucion~~ → ELIMINADO (sin evoluciones)
+- [ ] ~~Mostrar VFX al evolucionar un Beastibit~~ → ELIMINADO (sin evoluciones)
 - [ ] Preparar modelos 3D para nuevos Beastibit
 - [ ] Optimizar rendimiento movil del dashboard
 - [ ] Validar anti-spam en acciones de craft/evolve
 
 ---
 
-## Dia 3 (Continuacion) - Proxima Sesion
+## Dia 4 - 2026-06-30: Simplificacion - Sin evoluciones, nivel max 50, costo Bits en alimentacion
 
-### Tareas pendientes
+### Lo que se hizo
 
-#### Prioridad alta - Estandar de modelos Beastibit
-- [ ] Definir contrato tecnico obligatorio para que las animaciones funcionen en todos los modelos
-- [ ] Documentar que necesita un modelo: Humanoid, rig (Motor6D/Skin), AnimationController/Animator
-- [ ] Crear guia de preparacion de modelos para artistas (ver DOCUMENTO_FINAL_CONGELACION_V1.md seccion 7.12)
-- [ ] Estandarizar FireBaby y todos los modelos futuros bajo el mismo contrato
+#### Eliminacion de evoluciones (todos los scripts)
+- [X] TeamManager: removido evolveMonster, MAX_EVOLUTION, EVOLUTION_COST, EVO_XP_MULTIPLIER, ELEMENT_EVOLUTION_MINERAL, getEvolutionForLevel, getEvolutionMineralForMonster, getMonsterEvolution, ensureEvolutionsTable
+- [X] TeamManager: feedMonster ahora usa formula simplificada (sin mult de evo) y cobra Bits = NivelActual x 15
+- [X] TeamManager: MAX_LEVEL cambiado de 60 a 50, tabla de milestones reducida
+- [X] MonstersData: removido createDefaultEvolutionImages, campos img.evo1/evo2/evo3, evoActual, normalizacion de evo
+- [X] BeastibitVisuals.module: removido getEvolutionStage, simplificado getImageByMonsterData (una sola imagen)
+- [X] BackpackDataStore: removido monsterEvolutions de load/save
+- [X] CombatServer: removido handler de accion "evolve", removido evolutions de roster-sync, actualizado save
+- [X] RosterUI.client: removido EvolveButton, Craft tab muestra Nivel y costo Bits en vez de Evo X/3
 
-#### Prioridad alta - Revision de combate
-- [ ] Revisar el sistema de combate completo (PvE y PvP)
-- [ ] Identificar y corregir bugs existentes
-- [ ] Bug: al terminar la batalla el seguidor actual desaparece (no se vuelve a spawnear)
-- [ ] Posicionar correctamente los modelos 3D en formacion de duelo
+#### Costo de alimentacion en Bits
+- [X] Formula: `NivelActual x 15` Bits por cada alimentacion
+- [X] Visible en UI del Craft tab: "Costo alimentar: X Bits"
+- [X] Validacion en servidor: spendPlayerBits antes de sacrificar duplicado
 
-#### Evaluacion tecnica
-- [ ] Evaluar si al batallar conviene abrir una nueva escena/espacio separado para no interferir con el mundo abierto
-  - Ventaja: no hay colisiones con terreno, otros jugadores ni mobs salvajes
-  - Desventaja: quita inmersion, requiere transicion de escena
-  - Alternativa: mantener en el mismo mundo pero con zona segura y cleanup al terminar
-
-#### Prioridad media
-- [ ] Agregar iconos/imagenes reales a los Beastibit nuevos (MonstersData.img)
-- [ ] Mejorar feedback visual de captura (exito/fallo) en pantalla de resultado
-
-#### Prioridad baja
-- [ ] Separar CombatServer en submodulos
-- [ ] Ajustar balance de stats por evolucion
-- [ ] Mostrar VFX al evolucionar un Beastibit
-- [ ] Wandering/patrulla para Beastibits salvajes (animacion Idle + Walk lateral)
+#### Evaluacion de zona segura para batallas
+- [X] Confirmado: setupDuelParticipants (PvP) y setupMonsterDuelParticipant (PvE) ya implementan anclaje de jugadores
+- [X] Ambos modos congelan movimiento (WalkSpeed=0, JumpPower=0, PlatformStand=true, AutoRotate=false)
+- [X] Restauracion al terminar duelo en restoreDuelParticipants y endMonsterDuel
+- [X] No se requiere escena separada: la zona segura ya funciona en el mismo mundo

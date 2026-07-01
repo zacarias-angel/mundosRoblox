@@ -29,7 +29,6 @@ function BackpackDataStore.loadPlayerData(player)
 		fragments = {},
 		bits = 0,
 		minerals = {},
-		monsterEvolutions = {},
 		monsterXP = {},
 		monsterCounts = {},
 	}
@@ -65,12 +64,6 @@ function BackpackDataStore.loadPlayerData(player)
 				end
 			end
 		end
-		if type(saved.monsterEvolutions) == "table" then
-			for monsterId, evo in pairs(saved.monsterEvolutions) do
-				local safeEvo = math.clamp(math.floor(tonumber(evo) or 1), 1, 3)
-				data.monsterEvolutions[monsterId] = safeEvo
-			end
-		end
 		if type(saved.monsterXP) == "table" then
 			for monsterId, xp in pairs(saved.monsterXP) do
 				local safeXP = math.max(0, math.floor(tonumber(xp) or 0))
@@ -94,7 +87,7 @@ function BackpackDataStore.loadPlayerData(player)
 	return data
 end
 
-function BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, monsterEvolutions, monsterXP, monsterCounts)
+function BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, bits, minerals, monsterXP, monsterCounts)
 	if not backpackStore then
 		return
 	end
@@ -126,15 +119,6 @@ function BackpackDataStore.savePlayerData(player, unlockedMonsters, fragments, b
 			local safeCount = math.max(0, math.floor(tonumber(count) or 0))
 			if safeCount > 0 then
 				data.minerals[mineralName] = safeCount
-			end
-		end
-	end
-	if type(monsterEvolutions) == "table" then
-		data.monsterEvolutions = {}
-		for monsterId, evo in pairs(monsterEvolutions) do
-			local safeEvo = math.clamp(math.floor(tonumber(evo) or 1), 1, 3)
-			if safeEvo > 1 then
-				data.monsterEvolutions[monsterId] = safeEvo
 			end
 		end
 	end

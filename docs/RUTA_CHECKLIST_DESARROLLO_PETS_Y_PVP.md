@@ -13,7 +13,7 @@ Meta de producto:
 
 - Explorar mundos y biomas.
 - Encontrar, combatir y capturar Beastibit.
-- Progresar por niveles, evoluciones y equipo.
+- Progresar por niveles y equipo.
 - Competir en combates de domadores con buen feedback visual.
 
 Pilares:
@@ -34,23 +34,23 @@ Pilares:
 
 ## 2.2 Bestiario y catalogo de Beastibit
 
-- [ ] Crear estructura del bestiario (ID unico, nombre, elemento, rareza, mundo, bioma, nivel minimo, evoluciones).
+- [ ] Crear estructura del bestiario (ID unico, nombre, elemento, rareza, mundo, bioma, nivel minimo).
 - [ ] Definir cantidad de Beastibit por mundo.
 - [ ] Definir Beastibit por bioma dentro de cada mundo.
 - [ ] Definir convivencia de especies por zona (quienes comparten spawn).
 - [ ] Definir tabla de habitats y horarios/eventos si aplica.
-- [ ] Definir estados del bestiario: visto, encontrado, capturado, evolucionado.
+- [ ] Definir estados del bestiario: visto, encontrado, capturado. (sin "evolucionado")
 - [ ] Definir UI del bestiario con filtros (mundo, bioma, elemento, rareza, estado).
 
 ## 2.3 Progresion de Beastibit
 
-- [ ] Definir nivel maximo de Beastibit para version 1.
+- [ ] Definir nivel maximo de Beastibit para version 1. → 50 (definido 2026-06-30)
 - [ ] Definir curva de experiencia por nivel.
 - [ ] Definir fuentes de experiencia (combate, entrenamiento, objetos).
 - [ ] Definir reglas de subida de nivel por tipo de actividad.
-- [ ] Definir sistema de 3 evoluciones por Beastibit (condiciones y costos).
-- [ ] Definir si todas las especies tienen exactamente 3 evoluciones o excepciones.
-- [ ] Definir impacto de evolucion en stats, habilidades y apariencia.
+- [ ] ~~Definir sistema de 3 evoluciones por Beastibit (condiciones y costos).~~ → ELIMINADO: sin evoluciones
+- [ ] ~~Definir si todas las especies tienen exactamente 3 evoluciones o excepciones.~~ → ELIMINADO
+- [ ] ~~Definir impacto de evolucion en stats, habilidades y apariencia.~~ → ELIMINADO
 
 ## 2.4 Economia de captura y drops
 
@@ -65,9 +65,9 @@ Pilares:
 
 - [x] Definir cuales Beastibit pueden usarse como comida. (Base: duplicados, comunes y repetidos)
 - [x] Definir si hay Beastibit protegidos que no pueden sacrificarse. (Base: favoritos, equipo activo, Beastibit de historia)
-- [x] Definir valor de comida por rareza, nivel y evolucion.
+- [x] Definir valor de comida por rareza y nivel.
 - [x] Definir UI de confirmacion fuerte para evitar sacrificios accidentales.
-- [x] Definir costo en recursos para alimentar/evolucionar. (Sin fusion como sistema principal)
+- [x] ~~Definir costo en recursos para alimentar/evolucionar.~~ → alimentar: Bits = NivelActual × 15
 - [ ] Definir limite diario/semanal si se necesita control economico.
 
 ## 2.6 Mundos, biomas y niveles
@@ -113,7 +113,7 @@ Pilares:
 ## 2.10 UX/UI y guias
 
 - [ ] Diseñar UI del bestiario completa.
-- [ ] Diseñar UI de captura, evolucion y alimentacion.
+- [ ] Diseñar UI de captura y alimentacion.
 - [ ] Diseñar UI de progresion por mundo/bioma.
 - [ ] Diseñar guia de domador (tutorial progresivo por etapas).
 - [ ] Definir mensajes de onboarding para nuevos sistemas.
@@ -155,7 +155,7 @@ Entregables:
 
 - Documento de loop principal.
 - Documento de mundos/biomas.
-- Documento de progresion de Beastibit (nivel + evolucion + comida).
+- Documento de progresion de Beastibit (nivel + comida).
 - Documento de reglas de captura y drops.
 
 Criterio de cierre:
@@ -173,7 +173,7 @@ Entregables:
 - Lista oficial de especies para version 1.
 - Distribucion por mundo y bioma.
 - Tabla de rarezas y niveles.
-- Arbol de 3 evoluciones por especie.
+- Arbol de 3 evoluciones por especie. → ELIMINADO (sin evoluciones)
 
 Criterio de cierre:
 
@@ -190,11 +190,11 @@ Entregables:
 - Reglas finales de drops por pantalla.
 - Reglas de captura y duplicados.
 - Reglas de alimentacion/fusion y restricciones.
-- Curva de experiencia y costos de evolucion.
+- Curva de experiencia y costos de evolucion. → ELIMINADO (sin evoluciones, solo curva XP)
 
 Criterio de cierre:
 
-- El jugador puede conseguir Beastibit, subirlos y evolucionarlos sin huecos de diseño.
+- El jugador puede conseguir Beastibit y subirlos de nivel sin huecos de diseño.
 
 ## Fase 3: Spawn e IA de mundo (1-2 semanas)
 
@@ -253,7 +253,7 @@ Sprint siguiente recomendado:
 
 1. Cerrar cantidad de mundos y Beastibit del MVP.
 2. Cerrar reglas de captura/drop y duplicados.
-3. Cerrar regla exacta de 3 evoluciones por especie.
+3. ~~Cerrar regla exacta de 3 evoluciones por especie.~~ → ELIMINADO
 4. Cerrar politica de comida/fusion de Beastibit.
 5. Cerrar matriz mundo/bioma/nivel para spawn.
 
@@ -263,7 +263,7 @@ Sprint siguiente recomendado:
 - [ ] Decision 002: cantidad total de especies MVP.
 - [ ] Decision 003: regla final de captura por pantalla.
 - [ ] Decision 004: politica de duplicados y comida.
-- [ ] Decision 005: requisitos finales de evolucion.
+- [ ] Decision 005: requisitos finales de evolucion. → ELIMINADO (sin evoluciones)
 - [ ] Decision 006: recompensas PvP finales.
 - [ ] Decision 007: baseline de VFX MVP.
 - [x] Decision 008: baseline IA de combate NPC v1 (sesgo elemental, fases de HP, especial con cooldown y anti-rachas).
@@ -272,21 +272,21 @@ Sprint siguiente recomendado:
 - [x] Decision 011: estrellas PvP son prestigio social, sin impacto de poder (ataque/vida/stats).
 - [x] Decision 012: captura base sin modo gratis; usar recurso dedicado de captura (nombre final pendiente).
 - [x] Decision 013: duplicados se priorizan como comida para progresion de Beastibit.
-- [x] Decision 014: fusion deja de ser sistema principal; progresion por niveles + evolucion con materiales planetarios.
+- [x] Decision 014: fusion deja de ser sistema principal; progresion por niveles con materiales planetarios (minerales pendientes de redefinir).
 - [x] Decision 015: protector de estrella sera por cargas limitadas (Shield Charges), no proteccion infinita.
 - [x] Decision 016: PvE salvaje usa unidad unica (x1), no equipo NPC simulado x5.
 - [x] Decision 017: formula PvE salvaje confirmada: HP base x3.5 y daño base x combo x2.5.
 - [x] Decision 018: si el elemento elegido por IA no coincide con el elemento real del salvaje, ataque = miss (0 daño).
 - [x] Decision 019: VFX PvE de ataque salvaje usa 1 proyectil por ataque, sin escalar cantidad por combo.
 - [x] Decision 020: camera shake corto en cliente al impacto del salvaje como feedback visual.
-- [x] Decision 021: evolucion cuesta Bits + minerales por etapa (500/10 y 2500/30), mineral mapeado por elemento.
-- [x] Decision 022: XP por alimentacion usa rareza base (C10/R25/E60/L150) x multiplicador de evolucion del alimento.
+- [x] Decision 021: ~~evolucion cuesta Bits + minerales por etapa~~ → ELIMINADO (sin evoluciones)
+- [x] Decision 022: XP por alimentacion usa rareza base (C10/R25/E60/L150) x multiplicador de nivel del alimento.
 - [x] Decision 023: craft por fragmentos desbloquea Beastibit non-tenidos (C30/R80/E150 frags).
 - [x] Decision 024: titulos PvP en 7 hitos (Rookie 0, Hunter 10, Tamer 25, Elite 50, Master 100, Legend 200, Bitlord 500).
 - [x] Decision 025: Shield Charges max 3, +1 diario +1 semanal, se consume al perder PvP protegiendo estrellas.
-- [x] Decision 026: Bits y minerales persistidos en BackpackV1 junto con evoluciones y XP.
+- [x] Decision 026: Bits y minerales persistidos en BackpackV1 junto con XP.
 - [x] Decision 027: proteccion de alimento: no sacrificar equipo activo ni seguidor, confirmacion UI obligatoria.
-- [x] Decision 028: niveles 1-60 continuos con milestones interpolados, nivel determina rango de evolucion.
+- [x] Decision 028: niveles 1-50 continuos con milestones interpolados (sin evoluciones, máx 50).
 - [x] Decision 029: backpack usa Count (number) en vez de Unlocked (boolean), duplicados visibles y funcionales.
 - [x] Decision 030: mineral names sanitizados (sin espacios) para atributos Roblox.
 
@@ -294,7 +294,7 @@ Sprint siguiente recomendado:
 
 - Riesgo de sobrecarga de sistemas si no se congela primero la economia de progresion.
 - Riesgo de desbalance fuerte si no se define tiering por rareza temprano.
-- Riesgo de retrabajo de UI si no se cierran reglas de captura/evolucion antes.
+- Riesgo de retrabajo de UI si no se cierran reglas de captura/alimentacion antes.
 - Riesgo de lag de servidor si el sistema de respawn no nace con limites.
 - Riesgo de debt tecnico en placement/VFX si no se impone normalizacion de modelos 3D.
 

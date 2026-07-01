@@ -30,55 +30,37 @@ local function normalizeAssetId(raw)
     return raw
 end
 
-local function getEvolutionStage(monsterData)
-    -- Propósito: Resolver evolución actual de Beastibit con clamp seguro entre 1 y 3.
-    -- Precondiciones:
-    --   1. monsterData puede ser tabla o nil.
-    -- Ubicación: ReplicatedStorage/Modules/BeastibitVisuals.module
-    -- Retorna: number
-    if type(monsterData) ~= "table" then
-        return 1
-    end
-
-    local raw = monsterData.evoActual
-    if type(raw) ~= "number" then
-        raw = monsterData.Evo
-    end
-
-    local stage = tonumber(raw) or 1
-    stage = math.floor(stage)
-    return math.clamp(stage, 1, 3)
-end
-
 function BeastibitVisuals.getImageByMonsterData(monsterData)
-    -- Propósito: Resolver imagen de Beastibit según su evolución actual y schema soportado.
-    -- Precondiciones:
-    --   1. monsterData puede ser tabla o nil.
-    -- Ubicación: ReplicatedStorage/Modules/BeastibitVisuals.module
-    -- Retorna: string
-    if type(monsterData) ~= "table" then
-        return "rbxassetid://0"
-    end
+	-- Propósito: Resolver imagen de Beastibit (una sola forma, sin evoluciones).
+	-- Precondiciones:
+	--   1. monsterData puede ser tabla o nil.
+	-- Ubicación: ReplicatedStorage/Modules/BeastibitVisuals.module
+	-- Retorna: string
+	if type(monsterData) ~= "table" then
+		return "rbxassetid://0"
+	end
 
-    local stage = getEvolutionStage(monsterData)
+	local image = normalizeAssetId(monsterData.Image)
+	if image ~= "rbxassetid://0" then
+		return image
+	end
 
-    if type(monsterData.img) == "table" then
-        local key = "evo" .. tostring(stage)
-        local image = normalizeAssetId(monsterData.img[key])
-        if image ~= "rbxassetid://0" then
-            return image
-        end
-    end
+	if type(monsterData.img) == "table" then
+		image = normalizeAssetId(monsterData.img.evo1 or monsterData.img.evo2 or monsterData.img.evo3)
+		if image ~= "rbxassetid://0" then
+			return image
+		end
+	end
 
-    if type(monsterData.Img) == "table" then
-        local image = normalizeAssetId(monsterData.Img[stage])
-        if image ~= "rbxassetid://0" then
-            return image
-        end
-    end
+	if type(monsterData.Img) == "table" and #monsterData.Img >= 1 then
+		image = normalizeAssetId(monsterData.Img[1])
+		if image ~= "rbxassetid://0" then
+			return image
+		end
+	end
 
-    local legacy = monsterData.Image or monsterData.ImageId or monsterData.Icon or monsterData.Thumbnail
-    return normalizeAssetId(legacy)
+	local legacy = monsterData.Icon or monsterData.Thumbnail or monsterData.ImageId
+	return normalizeAssetId(legacy)
 end
 
 function BeastibitVisuals.getImageByMonsterId(monstersData, monsterId)

@@ -4,6 +4,8 @@
 
 Fecha de cierre: 2026-06-13 Estado: CONGELADO
 
+> **REVISIÓN 2026-06-30**: Se eliminan las evoluciones. Los Beastibits suben de nivel (máx 50) pero no evolucionan. Sin costos de Bits + minerales para evolución. Las secciones de este documento que mencionan evolución quedan obsoletas.
+
 ------------------------------------------------------------------------
 
 # 1. Scope del Alpha

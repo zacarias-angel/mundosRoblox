@@ -1,7 +1,9 @@
 # Sistema Numerico De Economia, Energia y XP Beastibit
 
-Version: Balance Inicial V1  
+Version: Balance Simplificado V2 (sin evoluciones, max nivel 50)
 Estado: Propuesta jugable base
+
+> **REVISIÓN 2026-06-30**: Se eliminan las evoluciones. Los Beastibits tienen una sola forma. Nivel máximo reducido a 50. Fórmula de XP simplificada (sin multiplicador de evolución). Costos de evolución eliminados.
 
 ## 1. Objetivos Del Sistema
 
@@ -12,7 +14,7 @@ Este sistema busca:
 - Hacer que cada duplicado tenga utilidad.
 - Mantener ritmo diario saludable.
 - Permitir progresion constante sin romper balance.
-- Separar claramente economia, captura y evolucion.
+- Separar claramente economia, captura y alimentacion.
 
 ## 2. Recursos Principales
 
@@ -22,7 +24,7 @@ Moneda principal del juego.
 
 Usos:
 
-- Evolucionar Beastibit.
+- Alimentar Beastibits (costo incremental por nivel).
 - Comprar items.
 - Expandir inventario.
 - Crafting futuro.
@@ -48,7 +50,7 @@ Fuentes adicionales:
 
 ## 2.3 Minerales Planetarios
 
-Materiales usados para evolucion.
+Materiales (uso pendiente de redefinir, antes: evolución).
 
 Ejemplos:
 
@@ -60,9 +62,8 @@ Ejemplos:
 
 Objetivo:
 
-- Dar identidad a cada planeta.
-- Obligar exploracion repetida.
-- Crear farmeo especifico por zona.
+- Pendiente de redefinir (antes: evolución).
+- Posibles usos futuros: crafting, venta por Bits, intercambio.
 
 ## 3. Costos De Captura
 
@@ -102,9 +103,42 @@ La progresion principal ocurre alimentando duplicados.
 Reglas:
 
 - Todos los Beastibit sirven como comida.
-- Evoluciones mas altas valen mas.
 - Rarezas mas altas valen mas.
 - Niveles altos aportan bonus adicional.
+- Sin multiplicador de evolucion (los Beastibits no evolucionan).
+
+## 4.2 Costo en Bits por Alimentacion
+
+Cada vez que se alimenta un Beastibit, se requiere un costo en Bits ademas del duplicado sacrificado.
+
+Formula:
+
+$$
+Costo\ Bits = NivelActual \times 15
+$$
+
+Donde `NivelActual` es el nivel del Beastibit que recibe la comida (antes de ganar XP).
+
+| Nivel | Costo Bits |
+|---|---:|
+| 1 | 15 |
+| 5 | 75 |
+| 10 | 150 |
+| 15 | 225 |
+| 20 | 300 |
+| 25 | 375 |
+| 30 | 450 |
+| 35 | 525 |
+| 40 | 600 |
+| 45 | 675 |
+| 49 | 735 |
+
+Proposito del costo:
+
+- Dar uso constante a los Bits (sink de economia).
+- Hacer que cada alimentacion sea una decision con peso.
+- Evitar que el jugador suba Bestibitis muy rapido sin jugar.
+- Ritmo: nivel bajo se paga con 1 victoria, nivel alto requiere farmear.
 
 ## 5. XP Base Por Rareza
 
@@ -115,15 +149,7 @@ Reglas:
 | Epico | 60 |
 | Legendario | 150 |
 
-## 6. Multiplicador Por Evolucion
-
-| Evolucion | Multiplicador |
-|---|---:|
-| Evo 1 | x1.0 |
-| Evo 2 | x1.75 |
-| Evo 3 | x3.0 |
-
-## 7. Multiplicador Por Nivel
+## 6. Multiplicador Por Nivel
 
 | Nivel | Multiplicador |
 |---|---:|
@@ -133,55 +159,53 @@ Reglas:
 | 16 - 20 | x1.5 |
 | 21 - 30 | x1.8 |
 | 31 - 40 | x2.2 |
-| 41 - 60 | x3.0 |
+| 41 - 50 | x3.0 |
 
-## 8. Formula Final De XP
+## 7. Formula Final De XP
 
 Formula:
 
 $$
-XP\ Final = XP\ Base\ Rareza \times Multiplicador\ Evolucion \times Multiplicador\ Nivel
+XP\ Final = XP\ Base\ Rareza \times Multiplicador\ Nivel
 $$
 
 Regla de redondeo: hacia arriba.
 
-## 9. Ejemplos Reales
+## 8. Ejemplos Reales
 
-## 9.1 Comun Evo 1 Nivel 3
+## 8.1 Comun Nivel 3
 
-Calculo: $10 \times 1.0 \times 0.8$
+Calculo: $10 \times 0.8$
 
 Resultado: 8 XP
 
-## 9.2 Comun Evo 2 Nivel 15
+## 8.2 Comun Nivel 15
 
-Calculo: $10 \times 1.75 \times 1.25$
+Calculo: $10 \times 1.25$
 
-Resultado: 22 XP
+Resultado: 13 XP
 
-## 9.3 Raro Evo 2 Nivel 15
+## 8.3 Raro Nivel 15
 
-Calculo: $25 \times 1.75 \times 1.25$
+Calculo: $25 \times 1.25$
 
-Resultado: 55 XP
+Resultado: 32 XP
 
-## 9.4 Epico Evo 3 Nivel 40
+## 8.4 Epico Nivel 40
 
-Calculo: $60 \times 3.0 \times 2.2$
+Calculo: $60 \times 2.2$
 
-Resultado: 396 XP
+Resultado: 132 XP
 
-## 9.5 Legendario Evo 3 Nivel 60
+## 8.5 Legendario Nivel 50
 
-Calculo: $150 \times 3.0 \times 3.0$
+Calculo: $150 \times 3.0$
 
-Resultado: 1350 XP
+Resultado: 450 XP
 
-## 10. Costos De Nivel
+## 9. Costos De Nivel
 
-## 10.1 XP Requerida Por Nivel
-
-Evo 1
+## 9.1 XP Requerida Por Nivel
 
 | Nivel | XP Total |
 |---|---:|
@@ -190,54 +214,14 @@ Evo 1
 | 10 | 120 |
 | 15 | 260 |
 | 20 | 500 |
-
-Evo 2
-
-| Nivel | XP Total |
-|---|---:|
-| 21 | 650 |
 | 25 | 950 |
 | 30 | 1450 |
 | 35 | 2200 |
 | 40 | 3200 |
-
-Evo 3
-
-| Nivel | XP Total |
-|---|---:|
-| 41 | 3800 |
 | 45 | 5000 |
 | 50 | 6800 |
-| 55 | 9200 |
-| 60 | 12000 |
 
-## 11. Evolucion Beastibit
-
-## 11.1 Requisitos
-
-Para evolucionar:
-
-- Alcanzar nivel maximo de etapa.
-- Pagar Bits.
-- Entregar minerales planetarios.
-
-## 11.2 Costos De Evolucion
-
-Evo 1 -> Evo 2
-
-| Recurso | Cantidad |
-|---|---:|
-| Bits | 500 |
-| Mineral planeta | 10 |
-
-Evo 2 -> Evo 3
-
-| Recurso | Cantidad |
-|---|---:|
-| Bits | 2500 |
-| Mineral planeta | 30 |
-
-## 12. Valor De Duplicados
+## 10. Valor De Duplicados
 
 Los duplicados nunca deben sentirse basura.
 
@@ -249,7 +233,7 @@ Usos:
 - Crafting.
 - Misiones futuras.
 
-## 13. Sistema Anti Frustracion
+## 11. Sistema Anti Frustracion
 
 ## 13.1 Pity De Captura
 
@@ -271,14 +255,14 @@ No se puede alimentar:
 
 Sin confirmacion manual.
 
-## 14. Economia Recomendada
+## 12. Economia Recomendada
 
 Ritmo diario esperado.
 
 Jugador casual:
 
 - 8 a 15 capturas diarias.
-- 1 evolucion cada varios dias.
+- Varios niveles por dia.
 - Progreso visible todos los dias.
 
 Jugador hardcore:

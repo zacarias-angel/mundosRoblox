@@ -1,6 +1,8 @@
 # Resumen Del Juego Actualizado
 
-Fecha de actualizacion: 2026-06-24
+Fecha de actualizacion: 2026-06-30
+
+> **REVISIÓN 2026-06-30**: Se eliminan las evoluciones. Los Beastibits suben de nivel (máx 50, antes 60) pero no evolucionan. Sin costos de evolución. Minerales planetarios pendientes de redefinir uso.
 
 Terminologia oficial:
 
@@ -129,7 +131,7 @@ Estado: FUNCIONAL BASE
 - La vista de seleccionado, seguidor y slots del team usa celdas cuadradas preparadas para imagen por Beastibit.
 - Soporta fallback seguro de imagen si el Beastibit no tiene AssetId.
 - Se ajusto safe area para evitar superposicion con el menu nativo de Roblox.
-- La resolucion de imagen por Beastibit ahora contempla evolucion (img.evo1/evo2/evo3 + evoActual) y mantiene fallback legacy.
+- La resolucion de imagen por Beastibit usa un solo asset (sin evoluciones, una sola forma).
 
 ## 3.6 Beastibit seguidor 3D (nuevo avance)
 
@@ -263,7 +265,7 @@ Nota de estado:
 7. Separacion de UI de mochila/formacion en script dedicado (RosterUI.client) para desacoplar de CombatUI.
 8. Migracion de mochila y team a interfaz por ranuras cuadradas en grid, preparada para imagen por Beastibit.
 9. Ajuste de safe area de UI de mochila para respetar topbar/menu nativo de Roblox.
-10. Integracion de BeastibitVisuals.module para unificar seleccion de imagen por evolucion en UI.
+10. Integracion de BeastibitVisuals.module para unificar seleccion de imagen en UI (una sola forma, sin evo).
 11. Implementacion de Beastibit seguidor 3D con fallback automatico a cubo por seguridad.
 12. Separacion companion/salvaje para evitar prompts de desafio en Beastibit seguidores.
 13. Ajuste de follow para gravedad planetaria usando ejes locales del personaje.
@@ -313,20 +315,17 @@ Nota de estado:
 - [X] Persistencia de inventario Beastibit con DataStore BackpackV1.
 - [X] Sistema de captura directa con pity por rareza.
 - [X] Cerrar tabla de XP por rareza para comida con duplicados (comun 10, raro 25, epico 60, legendario 150).
-- [X] Cerrar costos de evolucion por planeta: 500/2500 Bits + 10/30 minerales.
+- [X] Cerrar costos de evolucion por planeta: 500/2500 Bits + 10/30 minerales. → ELIMINADO (sin evoluciones)
 - [X] Confirmar protecciones de seguridad para Beastibit favoritos/equipo/historia en alimentacion (equipo y seguidor protegidos).
 
-## 7.4 Sistema de evolucion (FASE 2 - NUEVO)
+## 7.4 Sistema de evolucion → ELIMINADO (2026-06-30)
 
-Estado: IMPLEMENTADO
+Estado: ELIMINADO
 
-Archivo principal: ServerScriptService/Combat/TeamManager.lua
-
-- Funcion evolveMonster con validaciones.
-- Costos por etapa: Evo 1->2 (500 Bits + 10 minerales), Evo 2->3 (2500 Bits + 30 minerales).
-- Mineral de evolucion mapeado por elemento: Fuego=Magma Core, Agua=Aqua Shard, Planta=Root Crystal, Electricidad=Volt Core, Roca=Stone Heart.
-- Maximo 3 evoluciones por Beastibit.
-- Tracking individual de nivel de evolucion por especie en perfil y DataStore.
+- Los Beastibits **no evolucionan**. Tienen una sola forma permanentemente.
+- Suben de nivel (1 a 50) ganando XP por alimentación.
+- Sin costos de Bits + minerales para evolución.
+- Minerales planetarios: pendiente de redefinir nuevo propósito.
 
 ## 7.5 Sistema de alimentacion y XP (FASE 2 - NUEVO)
 
@@ -336,8 +335,9 @@ Archivo principal: ServerScriptService/Combat/TeamManager.lua
 
 - Funcion feedMonster: sacrifica un Beastibit para dar XP a otro.
 - XP base por rareza del alimento: Comun 10, Raro 25, Epico 60, Legendario 150.
-- Multiplicador por evolucion del alimento: Evo1 x1.0, Evo2 x1.75, Evo3 x3.0.
+- Multiplicador por nivel del alimento (sin multi de evo, ya que no hay evoluciones).
 - Protecciones: no se puede sacrificar si deja al team sin copias suficientes (Count > teamCopies). El seguidor se cambia automaticamente si es sacrificado.
+- Costo en Bits: `NivelActual × 15` por cada alimentacion (se paga ademas del duplicado sacrificado).
 - Confirmacion visual en UI antes de sacrificar (overlay de seleccion).
 - XP persistida en DataStore BackpackV1.
 
@@ -392,7 +392,8 @@ Archivo principal: ServerScriptService/Combat/PvpStarsService.lua
 
 ## 7.12 Combate en mundo abierto (nuevo)
 
-- [ ] Evaluar si abrir escena separada para duelos o mantener en mundo abierto con zona segura.
+- [X] Evaluar si abrir escena separada para duelos o mantener en mundo abierto con zona segura.
+- [X] **Decisión**: mantener en el mismo mundo. `setupDuelParticipants` (PvP) y `setupMonsterDuelParticipant` (PvE) ya anclan jugadores, congelan movimiento y restauran al terminar. No se necesita escena separada.
 - [ ] Posicionar correctamente modelos 3D en formacion de duelo (offsets por especie en DuelLinePlacement).
 - [ ] Prevenir interferencias: terreno, otros jugadores, mobs salvajes durante el duelo.
 
@@ -474,27 +475,27 @@ Definicion de listo para produccion (Definition of Done):
 
 ## 9. Resumen Ejecutivo
 
-Estado general del proyecto: SOLIDO Y JUGABLE. FASE 2 DE PROGRESION COMPLETA.
+Estado general del proyecto: SOLIDO Y JUGABLE. FASE 2 DE PROGRESION COMPLETA (EVOLUCIONES ELIMINADAS 2026-06-30).
 
 - Combate match-3: funcional en servidor/cliente, con cascadas y animaciones.
 - Duelos PvP/PvE: funcionales con estados completos.
 - Captura PvE: directa post-combate con pity, fragmentos y minerales.
-- Niveles y XP: sistema 1-60 con milestones, nivel determina evolucion.
+- Niveles y XP: sistema 1-50 con milestones, sin evoluciones.
 - Duplicados: backpack con Count, visibles en inventario y usables como comida.
-- Evolucion: gasta Bits + minerales, requiere nivel 20/40 segun etapa.
-- Alimentacion/XP: sacrifica duplicados, formula completa (rareza x evo x nivel).
+- ~~Evolucion: gasta Bits + minerales, requiere nivel 20/40 segun etapa.~~ → ELIMINADO
+- Alimentacion/XP: sacrifica duplicados, cuesta Bits (NivelActual × 15), formula simplificada (rareza x nivel).
 - Craft por fragmentos: desbloquea Beastibits usando fragmentos acumulados.
 - PvP: estrellas con titulos (Rookie a Bitlord) y Shield Charges contra perdida.
-- Persistencia: DataStore BackpackV1 (backpack, fragmentos, bits, minerales, evoluciones, XP, counts).
+- Persistencia: DataStore BackpackV1 (backpack, fragmentos, bits, minerales, XP, counts).
 - Gravedad planetaria: funcional con sistema avanzado de movimiento y camara.
 - Beastibit seguidor 3D: implementado con fallback, separacion companion/salvaje.
 - 20 Beastibits definidos en 2 planetas, 5 elementos, 4 rarezas.
 
 Siguiente foco recomendado:
 
-1. Agregar iconos/imagenes reales a los Beastibit nuevos.
-2. VFX/feedback de progreso (captura, evolucion).
+1. Agregar iconos/imagenes reales a los Beastibit nuevos (una sola forma, sin evo).
+2. VFX/feedback de progreso (captura, subida de nivel).
 3. Separar CombatServer en submodulos.
-4. Ajustar balance de stats por evolucion.
+4. ~~Ajustar balance de stats por evolucion.~~ → ELIMINADO
 5. Preparar modelos 3D para nuevos Beastibit.
 6. Limpieza de arquitectura y documentacion para escalar contenido.

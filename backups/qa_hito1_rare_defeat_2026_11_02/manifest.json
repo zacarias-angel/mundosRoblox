@@ -1,0 +1,17 @@
+{
+  "note": "NPC starvation fixed; full-health rare encounter ended in legitimate defeat with 190 enemy HP remaining; balance deferred",
+  "results": {
+    "completed": false,
+    "invalidPayloadsRejected": 6,
+    "ready": true,
+    "progress": {
+      "selfHP": 0,
+      "turn": 18,
+      "enemyHP": 190
+    },
+    "cancelExactReturn": true,
+    "error": "ServerScriptService.RecoveryQA_StudioOnly:91: Full-health victory failed",
+    "arenaCapacity": 8
+  },
+  "scripts": []
+}

@@ -1,0 +1,68 @@
+{
+  "manual": {
+    "proximityPromptE": true,
+    "cancelButton": true,
+    "mouseDrag": true
+  },
+  "mobile": {
+    "ignoreGuiInset": true,
+    "cancelButton": "144x44",
+    "screenInsets": "DeviceSafeInsets",
+    "device": "iPhone 17 Pro",
+    "cellPixels": 45.64,
+    "viewport": "750x381",
+    "orientation": "LandscapeSensor"
+  },
+  "main": {
+    "fullHealthVictory": {
+      "bits": 50,
+      "playerTookDamage": true,
+      "once": true,
+      "species": "FireBaby"
+    },
+    "progress": {
+      "selfHP": 13875,
+      "turn": 8,
+      "enemyHP": 0
+    },
+    "respawnCleanup": true,
+    "completed": true,
+    "ready": true,
+    "invalidPayloadsRejected": 6,
+    "combatAfterRespawn": true,
+    "returnFocusCleanup": true,
+    "consecutiveCombat": true,
+    "cancelExactReturn": true,
+    "arenaCapacity": 8
+  },
+  "edges": {
+    "duplicateSubmitRejected": true,
+    "deathAndAutomaticRespawn": true,
+    "cancelDuringResolution": true,
+    "completed": true
+  },
+  "note": "Studio local gameplay QA. No production datastore, physical phone or 8-client load test. Export invoked from plugin context.",
+  "disconnect": {
+    "duelCleared": true,
+    "allSlotsAvailable": true,
+    "playerGone": true,
+    "stateCleared": true,
+    "returnFoci": 0,
+    "petFolderRemoved": true,
+    "reservationReleased": true
+  },
+  "scripts": [
+    {
+      "path": "ServerScriptService.RecoveryQA_StudioOnly",
+      "class": "Script"
+    },
+    {
+      "path": "ServerScriptService.RecoveryQAEdgeCases",
+      "class": "Script"
+    },
+    {
+      "path": "ServerScriptService.RecoveryQADisconnect",
+      "class": "Script"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "validation": {
+    "invalidPayloads": 6,
+    "arenaCapacity": 8,
+    "suiteCompleted": false,
+    "error": "ServerScriptService.RecoveryQA_StudioOnly:65: full HP victory failed",
+    "victoryProgress": {
+      "self": 11000,
+      "moves": 35,
+      "enemy": 17050
+    }
+  },
+  "note": "First pass before NPC starvation correction; UI mouse drag checked separately",
+  "fullRun": {
+    "completed": true,
+    "fullHealthVictory": {
+      "bits": 120,
+      "rewardOnce": true
+    },
+    "progress": {
+      "selfHP": 15000,
+      "turn": 10,
+      "combosBeforeCascade": 3,
+      "enemyHP": 0
+    },
+    "consecutiveCombat": true,
+    "respawnCleanup": true,
+    "combatAfterRespawn": true
+  },
+  "scripts": []
+}
